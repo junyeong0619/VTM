@@ -10,14 +10,14 @@ from vectorwave.models.db_config import WeaviateSettings
 @pytest.fixture
 def mock_decorator_deps(monkeypatch):
     """
-    decorator.py의 의존성 (get_batch_manager, get_weaviate_settings)을 모킹
+    Mocks dependencies for decorator.py (get_batch_manager, get_weaviate_settings)
     """
-    # get_batch_manager 모킹
+    # Mock get_batch_manager
     mock_batch_manager = MagicMock()
     mock_batch_manager.add_object = MagicMock()
     mock_get_batch_manager = MagicMock(return_value=mock_batch_manager)
 
-    # get_weaviate_settings 모킹
+    # Mock get_weaviate_settings
     mock_settings = WeaviateSettings(
         COLLECTION_NAME="TestFunctions",
         EXECUTION_COLLECTION_NAME="TestExecutions",
@@ -25,7 +25,7 @@ def mock_decorator_deps(monkeypatch):
     )
     mock_get_settings = MagicMock(return_value=mock_settings)
 
-    # patch.dict는 decorator.py 내부의 임포트에 적용
+    # patch.dict applies to imports inside decorator.py
     monkeypatch.setattr("vectorwave.core.decorator.get_batch_manager", mock_get_batch_manager)
     monkeypatch.setattr("vectorwave.core.decorator.get_weaviate_settings", mock_get_settings)
 
@@ -38,12 +38,11 @@ def mock_decorator_deps(monkeypatch):
 
 def test_vectorize_static_data_collection(mock_decorator_deps):
     """
-    Case 1: 데코레이터가 로드될 때 (정적) 'VectorWaveFunctions'에 데이터를 1회 추가하는지 테스트
+    Case 1: Test if data is added once to 'VectorWaveFunctions' (static) when the decorator is loaded
     """
     mock_batch = mock_decorator_deps["batch"]
     mock_settings = mock_decorator_deps["settings"]
 
-    # --- 데코레이터 정의 ---
     @vectorize(
         search_description="Test search desc",
         sequence_narrative="Test sequence narr"
@@ -53,15 +52,16 @@ def test_vectorize_static_data_collection(mock_decorator_deps):
         pass
     # --- ----------------- ---
 
-    # 1. Assert: get_batch_manager와 get_weaviate_settings가 로드 시점에 호출됨
+    # 1. Assert: get_batch_manager and get_weaviate_settings are called at load time
     mock_decorator_deps["get_batch"].assert_called_once()
-    # (get_weaviate_settings는 batch 초기화 때 이미 1번 호출되었을 수 있으므로 call_count 대신 확인)
+    # (get_weaviate_settings might have already been called once during batch initialization,
+    # so check 'called' instead of 'call_count')
     assert mock_decorator_deps["get_settings"].called
 
-    # 2. Assert: batch.add_object가 1회 호출됨
+    # 2. Assert: batch.add_object is called once
     mock_batch.add_object.assert_called_once()
 
-    # 3. Assert: 호출 인자가 'VectorWaveFunctions' 컬렉션에 대한 것인지 확인
+    # 3. Assert: Check if the call arguments are for the 'VectorWaveFunctions' collection
     args, kwargs = mock_batch.add_object.call_args
 
     assert kwargs["collection"] == mock_settings.COLLECTION_NAME
@@ -73,7 +73,7 @@ def test_vectorize_static_data_collection(mock_decorator_deps):
 
 def test_vectorize_dynamic_data_logging_success(mock_decorator_deps):
     """
-    Case 2: 데코레이트된 함수가 '성공' 실행 시 (동적) 'VectorWaveExecutions'에 로그를 추가하는지 테스트
+    Case 2: Test if the decorated function adds a log to 'VectorWaveExecutions' (dynamic) on 'successful' execution
     """
     mock_batch = mock_decorator_deps["batch"]
     mock_settings = mock_decorator_deps["settings"]
@@ -82,29 +82,27 @@ def test_vectorize_dynamic_data_logging_success(mock_decorator_deps):
     def my_test_function_dynamic():
         return "Success"
 
-    # --- 함수 실행 ---
     result = my_test_function_dynamic()
-    # --- ----------- ---
 
-    # 1. Assert: 함수 결과가 정상 반환
+    # 1. Assert: Function returns the result normally
     assert result == "Success"
 
-    # 2. Assert: add_object가 총 2번 호출됨 (정적 1회 + 동적 1회)
+    # 2. Assert: add_object is called 2 times in total (1 static + 1 dynamic)
     assert mock_batch.add_object.call_count == 2
 
-    # 3. Assert: 마지막 호출(동적 로그)의 인자 확인
+    # 3. Assert: Check arguments of the last call (dynamic log)
     args, kwargs = mock_batch.add_object.call_args
 
     assert kwargs["collection"] == mock_settings.EXECUTION_COLLECTION_NAME
     assert kwargs["properties"]["status"] == "SUCCESS"
     assert kwargs["properties"]["error_message"] is None
     assert kwargs["properties"]["duration_ms"] > 0
-    # global_custom_values (run_id)가 병합되었는지 확인
+    # Check if global_custom_values (run_id) were merged
     assert kwargs["properties"]["run_id"] == "test-run-abc"
 
 def test_vectorize_dynamic_data_logging_failure(mock_decorator_deps):
     """
-    Case 3: 데코레이트된 함수가 '실패' 실행 시 'status=ERROR' 로그를 추가하는지 테스트
+    Case 3: Test if the decorated function adds a 'status=ERROR' log on 'failed' execution
     """
     mock_batch = mock_decorator_deps["batch"]
     mock_settings = mock_decorator_deps["settings"]
@@ -113,19 +111,17 @@ def test_vectorize_dynamic_data_logging_failure(mock_decorator_deps):
     def my_failing_function():
         raise ValueError("This is a test error")
 
-    # --- 함수 실행 (예외 발생 확인) ---
     with pytest.raises(ValueError, match="This is a test error"):
         my_failing_function()
-    # --- ------------------------- ---
 
-    # 1. Assert: add_object가 총 2번 호출됨 (정적 1회 + 동적 1회)
+    # 1. Assert: add_object is called 2 times in total (1 static + 1 dynamic)
     assert mock_batch.add_object.call_count == 2
 
-    # 2. Assert: 마지막 호출(동적 로그)의 인자 확인
+    # 2. Assert: Check arguments of the last call (dynamic log)
     args, kwargs = mock_batch.add_object.call_args
 
     assert kwargs["collection"] == mock_settings.EXECUTION_COLLECTION_NAME
     assert kwargs["properties"]["status"] == "ERROR"
     assert "ValueError: This is a test error" in kwargs["properties"]["error_message"]
-    assert "Traceback (most recent call last):" in kwargs["properties"]["error_message"] # [수정된 코드]
+    assert "Traceback (most recent call last):" in kwargs["properties"]["error_message"]
     assert kwargs["properties"]["run_id"] == "test-run-abc"
