@@ -44,6 +44,7 @@ def get_weaviate_client(settings: WeaviateSettings) -> weaviate.WeaviateClient:
 def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: WeaviateSettings):
     """
     Defines and creates the VectorWaveFunctions collection schema.
+    Now includes custom properties loaded from the settings (via .weaviate_properties file).
 
     [Raises]
     - SchemaCreationError: If an error occurs during schema creation.
@@ -58,48 +59,89 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
     # 2. If it doesn't exist, define and create the collection
     print(f"Creating collection '{collection_name}'...")
 
+    # 3. Define Base Properties
+    base_properties = [
+        wvc.Property(
+            name="function_name",
+            data_type=wvc.DataType.TEXT,
+            description="The name of the vectorized function"
+        ),
+        wvc.Property(
+            name="module_name",
+            data_type=wvc.DataType.TEXT,
+            description="The Python module path where the function is defined"
+        ),
+        wvc.Property(
+            name="docstring",
+            data_type=wvc.DataType.TEXT,
+            description="The function's Docstring (description)"
+        ),
+        wvc.Property(
+            name="source_code",
+            data_type=wvc.DataType.TEXT,
+            description="The actual source code of the function"
+        ),
+        wvc.Property(
+            name="call_count",
+            data_type=wvc.DataType.INT,
+            description="Function call count",
+            default_value=0
+        ),
+    ]
+
+    # 4. Parse Custom Properties (loaded from JSON file via settings object)
+    custom_properties = []
+    if settings.custom_properties:
+        print(f"Adding custom properties: {list(settings.custom_properties.keys())}")
+
+        for name, prop_details in settings.custom_properties.items():
+            if not isinstance(prop_details, dict):
+                raise SchemaCreationError(f"Custom property '{name}' in config file must be a dictionary.")
+
+            # Get data_type (Required)
+            dtype_str = prop_details.get("data_type")
+            if not dtype_str:
+                raise SchemaCreationError(f"Custom property '{name}' in config file is missing 'data_type'.")
+
+            # Get description (Optional)
+            description = prop_details.get("description")
+
+            try:
+                # Convert string (e.g., "TEXT") to Weaviate Enum (wvc.DataType.TEXT)
+                data_type = getattr(wvc.DataType, dtype_str.upper())
+
+                custom_properties.append(
+                    wvc.Property(
+                        name=name,
+                        data_type=data_type,
+                        description=description
+                    )
+                )
+            except AttributeError:
+                raise SchemaCreationError(
+                    f"Invalid data_type '{dtype_str}' for custom property '{name}'. "
+                    f"Use a valid wvc.DataType string (e.g., 'TEXT', 'INT', 'NUMBER')."
+                )
+            except Exception as e:
+                raise SchemaCreationError(f"Error processing custom property '{name}': {e}")
+
+    # 5. Combine properties
+    all_properties = base_properties + custom_properties
+
     try:
         vectorwave_collection = client.collections.create(
             name=collection_name,
 
-            # 3. Define Properties
-            properties=[
-                wvc.Property(
-                    name="function_name",
-                    data_type=wvc.DataType.TEXT,
-                    description="The name of the vectorized function"
-                ),
-                wvc.Property(
-                    name="module_name",
-                    data_type=wvc.DataType.TEXT,
-                    description="The Python module path where the function is defined"
-                ),
-                wvc.Property(
-                    name="docstring",
-                    data_type=wvc.DataType.TEXT,
-                    description="The function's Docstring (description)"
-                ),
-                wvc.Property(
-                    name="source_code",
-                    data_type=wvc.DataType.TEXT,
-                    description="The actual source code of the function"
-                ),
-                # TODO: Additional properties for 'execution flow prediction' (e.g., call_count, avg_runtime)
-                wvc.Property(
-                    name="call_count",
-                    data_type=wvc.DataType.INT,
-                    description="Function call count",
-                    default_value=0
-                ),
-            ],
+            # 6. Use combined properties
+            properties=all_properties,
 
-            # 4. Vectorizer Configuration
+            # 7. Vectorizer Configuration
             vectorizer_config=wvc.Configure.Vectorizer.text2vec_openai(
                 # OpenAI API key must be set via environment variable (OPENAI_API_KEY).
                 vectorize_collection_name=settings.IS_VECTORIZE_COLLECTION_NAME, # Include collection name in vectorization
             ),
 
-            # 5. Generative Configuration (for RAG, etc.)
+            # 8. Generative Configuration (for RAG, etc.)
             generative_config=wvc.Configure.Generative.openai()
         )
 
