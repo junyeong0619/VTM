@@ -327,7 +327,7 @@ def test_create_schema_custom_prop_missing_type(settings_with_missing_type_prop)
 @patch('vectorwave.database.db.wvc.Configure.Vectorizer.none')
 def test_create_execution_schema_new(mock_vectorizer_none, test_settings):
     """
-    Case 10: 'VectorWaveExecutions' 스키마가 존재하지 않을 때 성공적으로 생성되는지 테스트
+    Case 10: Test if 'VectorWaveExecutions' schema is created successfully when it does not exist
     """
     # 1. Arrange
     mock_client = MagicMock(spec=weaviate.WeaviateClient)
@@ -347,7 +347,7 @@ def test_create_execution_schema_new(mock_vectorizer_none, test_settings):
     call_args = mock_collections.create.call_args
     assert call_args.kwargs.get('name') == test_settings.EXECUTION_COLLECTION_NAME
 
-    # 기본 속성이 포함되었는지 확인
+    # Check if base properties are included
     passed_props_map = {prop.name: prop for prop in call_args.kwargs.get('properties', [])}
     assert "function_uuid" in passed_props_map
     assert "timestamp_utc" in passed_props_map
@@ -359,12 +359,12 @@ def test_create_execution_schema_new(mock_vectorizer_none, test_settings):
 
 def test_create_execution_schema_existing(test_settings):
     """
-    Case 11: 'VectorWaveExecutions' 스키마가 이미 존재할 때 생성(create)을 건너뛰는지 테스트
+    Case 11: Test if creation is skipped when 'VectorWaveExecutions' schema already exists
     """
     # 1. Arrange
     mock_client = MagicMock(spec=weaviate.WeaviateClient)
     mock_collections = MagicMock()
-    mock_collections.exists.return_value = True # 존재한다고 설정
+    mock_collections.exists.return_value = True
     mock_existing_collection = MagicMock()
     mock_collections.get.return_value = mock_existing_collection
     mock_client.collections = mock_collections
@@ -374,6 +374,6 @@ def test_create_execution_schema_existing(test_settings):
 
     # 3. Assert
     mock_collections.exists.assert_called_once_with(test_settings.EXECUTION_COLLECTION_NAME)
-    mock_collections.create.assert_not_called() # create가 호출되지 않아야 함
-    mock_collections.get.assert_called_once_with(test_settings.EXECUTION_COLLECTION_NAME) # get이 호출되어야 함
+    mock_collections.create.assert_not_called() # create should not be called
+    mock_collections.get.assert_called_once_with(test_settings.EXECUTION_COLLECTION_NAME) # get should be called
     assert collection == mock_existing_collection

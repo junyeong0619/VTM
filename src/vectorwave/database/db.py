@@ -202,7 +202,6 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
     if settings.custom_properties:
         print(f"Adding custom properties to '{collection_name}': {list(settings.custom_properties.keys())}")
         for name, prop_details in settings.custom_properties.items():
-            # (위와 동일한 안전 로직 적용)
             try:
                 if not isinstance(prop_details, dict):
                     raise ValueError("Property details must be a dictionary.")
@@ -237,7 +236,7 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
 
 def initialize_database():
     """
-    (권장) 클라이언트와 두 개의 스키마를 모두 초기화하는 헬퍼 함수.
+    Helper function to initialize both the client and the two schemas.
     """
     try:
         settings = get_weaviate_settings()

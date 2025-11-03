@@ -40,7 +40,7 @@ def get_weaviate_settings() -> WeaviateSettings:
     file_path = settings.CUSTOM_PROPERTIES_FILE_PATH
 
     if file_path and os.path.exists(file_path):
-        print(f"Loading custom properties schema from '{file_path}'...")  # print 유지
+        print(f"Loading custom properties schema from '{file_path}'...")
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 loaded_data = json.load(f)
@@ -55,10 +55,10 @@ def get_weaviate_settings() -> WeaviateSettings:
                     settings.custom_properties = None
 
         except json.JSONDecodeError as e:
-            print(f"Warning: Could not parse JSON from '{file_path}'. File might be malformed. {e}")  # print 유지
+            print(f"Warning: Could not parse JSON from '{file_path}'. File might be malformed. {e}")
             settings.custom_properties = None
         except Exception as e:
-            print(f"Warning: Could not read file '{file_path}': {e}")  # print 유지
+            print(f"Warning: Could not read file '{file_path}': {e}")
             settings.custom_properties = None
 
     elif file_path:

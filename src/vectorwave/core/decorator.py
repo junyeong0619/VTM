@@ -13,13 +13,13 @@ def vectorize(search_description: str,
     """
     VectorWave Decorator
 
-    (1) 함수 정의(정적 데이터)를 스크립트 로드 시 1회 수집합니다.
-    (2) 함수 실행(동적 데이터)을 함수 호출 시 매번 기록합니다.
+    (1) Collects function definitions (static data) once on script load.
+    (2) Records function execution (dynamic data) every time the function is called.
     """
 
     def decorator(func):
 
-        # --- 1. 정적 데이터 수집 (스크립트 로드 시 1회 실행) ---
+        # --- 1. Static Data Collection (Runs once on script load) ---
         func_uuid = None
         try:
             module_name = func.__module__
@@ -28,7 +28,7 @@ def vectorize(search_description: str,
             func_identifier = f"{module_name}.{function_name}"
             func_uuid = generate_uuid5(func_identifier)
 
-            # db.py의 create_vectorwave_schema 기본 속성과 일치
+            # Matches the base properties in db.py's create_vectorwave_schema
             static_properties = {
                 "function_name": function_name,
                 "module_name": module_name,
@@ -55,7 +55,7 @@ def vectorize(search_description: str,
         @wraps(func)
         def wrapper(*args, **kwargs):
 
-            # --- 2. 동적 데이터 로깅 (함수 호출 시 매번 실행) ---
+            # --- 2. Dynamic Data Logging (Runs every time the function is called) ---
             if not func_uuid:
                 print(f"Warning: Skipping execution log for {func.__name__}: func_uuid not set.") # print 유지
                 return func(*args, **kwargs)
@@ -80,7 +80,7 @@ def vectorize(search_description: str,
                     settings = get_weaviate_settings()
                     global_values = settings.global_custom_values or {}
 
-                    # db.py의 create_execution_schema 기본 속성과 일치
+                    # Matches the base properties in db.py's create_execution_schema
                     execution_props = {
                         "function_uuid": func_uuid,
                         "timestamp_utc": timestamp_utc,
@@ -89,7 +89,7 @@ def vectorize(search_description: str,
                         "error_message": error_msg,
                     }
 
-                    # 전역 커스텀 값(run_id 등) 병합
+                    # Merge global custom values (e.g., run_id)
                     execution_props.update(global_values)
 
                     batch = get_batch_manager()
