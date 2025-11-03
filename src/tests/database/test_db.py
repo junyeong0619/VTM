@@ -15,6 +15,9 @@ from vectorwave.exception.exceptions import (
     SchemaCreationError
 )
 
+from vectorwave.database.db import create_execution_schema
+
+
 # --- Test Fixtures ---
 
 @pytest.fixture
@@ -260,9 +263,13 @@ def test_create_schema_with_custom_properties(settings_with_custom_props):
     assert "source_code" in passed_props_map
     assert passed_props_map["function_name"].dataType == wvc.DataType.TEXT
 
+    assert "search_description" in passed_props_map
+    assert "sequence_narrative" in passed_props_map
+
     # --- Custom Property Validation ---
     assert "run_id" in passed_props_map
     assert "experiment_id" in passed_props_map
+
 
     # Validate 'run_id' type and description
     run_id_prop = passed_props_map["run_id"]
@@ -274,8 +281,9 @@ def test_create_schema_with_custom_properties(settings_with_custom_props):
     assert exp_id_prop.dataType == wvc.DataType.INT
     assert exp_id_prop.description == "Identifier for the experiment"
 
+
     # Check total property count (5 base + 2 custom)
-    assert len(passed_props_list) == 5 + 2
+    assert len(passed_props_list) == 6 + 2
 
 
 def test_create_schema_custom_prop_invalid_type(settings_with_invalid_type_prop):
@@ -314,3 +322,58 @@ def test_create_schema_custom_prop_missing_type(settings_with_missing_type_prop)
     # Check if the error message indicates 'data_type' is missing
     assert "missing 'data_type'" in str(exc_info.value)
     assert "another_bad_prop" in str(exc_info.value)
+
+
+@patch('vectorwave.database.db.wvc.Configure.Vectorizer.none')
+def test_create_execution_schema_new(mock_vectorizer_none, test_settings):
+    """
+    Case 10: 'VectorWaveExecutions' 스키마가 존재하지 않을 때 성공적으로 생성되는지 테스트
+    """
+    # 1. Arrange
+    mock_client = MagicMock(spec=weaviate.WeaviateClient)
+    mock_collections = MagicMock()
+    mock_collections.exists.return_value = False # 생성 트리거
+    mock_new_collection = MagicMock()
+    mock_collections.create.return_value = mock_new_collection
+    mock_client.collections = mock_collections
+
+    # 2. Act
+    collection = create_execution_schema(mock_client, test_settings)
+
+    # 3. Assert
+    mock_collections.exists.assert_called_once_with(test_settings.EXECUTION_COLLECTION_NAME)
+    mock_collections.create.assert_called_once()
+
+    call_args = mock_collections.create.call_args
+    assert call_args.kwargs.get('name') == test_settings.EXECUTION_COLLECTION_NAME
+
+    # 기본 속성이 포함되었는지 확인
+    passed_props_map = {prop.name: prop for prop in call_args.kwargs.get('properties', [])}
+    assert "function_uuid" in passed_props_map
+    assert "timestamp_utc" in passed_props_map
+    assert "status" in passed_props_map
+    assert "duration_ms" in passed_props_map
+
+    assert collection == mock_new_collection
+
+
+def test_create_execution_schema_existing(test_settings):
+    """
+    Case 11: 'VectorWaveExecutions' 스키마가 이미 존재할 때 생성(create)을 건너뛰는지 테스트
+    """
+    # 1. Arrange
+    mock_client = MagicMock(spec=weaviate.WeaviateClient)
+    mock_collections = MagicMock()
+    mock_collections.exists.return_value = True # 존재한다고 설정
+    mock_existing_collection = MagicMock()
+    mock_collections.get.return_value = mock_existing_collection
+    mock_client.collections = mock_collections
+
+    # 2. Act
+    collection = create_execution_schema(mock_client, test_settings)
+
+    # 3. Assert
+    mock_collections.exists.assert_called_once_with(test_settings.EXECUTION_COLLECTION_NAME)
+    mock_collections.create.assert_not_called() # create가 호출되지 않아야 함
+    mock_collections.get.assert_called_once_with(test_settings.EXECUTION_COLLECTION_NAME) # get이 호출되어야 함
+    assert collection == mock_existing_collection

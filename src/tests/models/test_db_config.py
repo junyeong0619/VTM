@@ -105,3 +105,39 @@ def test_get_settings_invalid_json(mock_json_load, mock_open_file, mock_exists, 
     # Check if 'Could not parse JSON' warning was printed
     captured = capsys.readouterr()
     assert "Could not parse JSON" in captured.out
+
+@patch('os.path.exists', return_value=True)
+@patch('builtins.open', new_callable=mock_open, read_data=MOCK_JSON_DATA)
+@patch('os.environ.get') # os.environ.get을 모킹합니다
+def test_get_settings_loads_global_custom_values(mock_env_get, mock_open_file, mock_exists):
+    """
+    Case 4: .weaviate_properties에 정의된 "run_id"에 대해
+    환경 변수 "RUN_ID"의 값을 global_custom_values로 로드하는지 테스트
+    """
+    # 1. Arrange
+    # MOCK_JSON_DATA는 "run_id"와 "experiment_id"를 정의합니다.
+    # os.environ.get("RUN_ID")가 "test-run-123"을 반환하도록 설정합니다.
+    # os.environ.get("EXPERIMENT_ID")는 None을 반환하도록 합니다.
+    def mock_env_side_effect(key):
+        if key == "RUN_ID":
+            return "test-run-123"
+        return None
+
+    mock_env_get.side_effect = mock_env_side_effect
+    get_weaviate_settings.cache_clear()
+
+    # 2. Act
+    settings = get_weaviate_settings()
+
+    # 3. Assert
+    # .weaviate_properties는 정상적으로 로드되어야 합니다.
+    assert settings.custom_properties is not None
+    assert "run_id" in settings.custom_properties
+
+    # global_custom_values가 올바르게 로드되었는지 확인합니다.
+    assert settings.global_custom_values is not None
+    assert "run_id" in settings.global_custom_values
+    assert settings.global_custom_values["run_id"] == "test-run-123"
+
+    # "EXPERIMENT_ID"는 os.environ.get이 None을 반환했으므로 포함되지 않아야 합니다.
+    assert "experiment_id" not in settings.global_custom_values

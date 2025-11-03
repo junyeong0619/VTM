@@ -8,6 +8,8 @@ from vectorwave.exception.exceptions import (
 )
 from weaviate.exceptions import WeaviateConnectionError as WeaviateClientConnectionError
 
+from vectorwave.models.db_config import get_weaviate_settings
+
 
 # Code based on Weaviate v4 (latest) client.
 
@@ -82,10 +84,14 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
             description="The actual source code of the function"
         ),
         wvc.Property(
-            name="call_count",
-            data_type=wvc.DataType.INT,
-            description="Function call count",
-            default_value=0
+            name="search_description",
+            data_type=wvc.DataType.TEXT,
+            description="User-provided description for similarity search (from @vectorize)"
+        ),
+        wvc.Property(
+            name="sequence_narrative",
+            data_type=wvc.DataType.TEXT,
+            description="User-provided context about what happens next (from @vectorize)"
         ),
     ]
 
@@ -151,3 +157,95 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
     except Exception as e:
         # Raise a specific exception instead of returning None
         raise SchemaCreationError(f"Error during schema creation: {e}")
+
+
+def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateSettings):
+    """
+    Defines and creates the VectorWaveExecutions (dynamic) collection schema.
+    """
+    collection_name = settings.EXECUTION_COLLECTION_NAME
+
+    if client.collections.exists(collection_name):
+        print(f"Collection '{collection_name}' already exists. Skipping creation.")
+        return client.collections.get(collection_name)
+
+    print(f"Creating collection '{collection_name}'...")
+
+    properties = [
+        wvc.Property(
+            name="function_uuid",
+            data_type=wvc.DataType.UUID, # VectorWaveFunctions 객체와 연결
+            description="The UUID of the executed function definition"
+        ),
+        wvc.Property(
+            name="timestamp_utc",
+            data_type=wvc.DataType.DATE,
+            description="The UTC timestamp when the execution started"
+        ),
+        wvc.Property(
+            name="duration_ms",
+            data_type=wvc.DataType.NUMBER,
+            description="Total execution time in milliseconds"
+        ),
+        wvc.Property(
+            name="status",
+            data_type=wvc.DataType.TEXT, # "SUCCESS" or "ERROR"
+            description="Execution status"
+        ),
+        wvc.Property(
+            name="error_message",
+            data_type=wvc.DataType.TEXT,
+            description="Error message and traceback if status is 'ERROR'"
+        ),
+    ]
+
+    if settings.custom_properties:
+        print(f"Adding custom properties to '{collection_name}': {list(settings.custom_properties.keys())}")
+        for name, prop_details in settings.custom_properties.items():
+            # (위와 동일한 안전 로직 적용)
+            try:
+                if not isinstance(prop_details, dict):
+                    raise ValueError("Property details must be a dictionary.")
+
+                dtype_str = prop_details.get("data_type")
+                if not dtype_str:
+                    raise ValueError("data_type is missing.")
+
+                data_type = getattr(wvc.DataType, dtype_str.upper())
+                description = prop_details.get("description")
+
+                properties.append(
+                    wvc.Property(
+                        name=name,
+                        data_type=data_type,
+                        description=description
+                    )
+                )
+            except Exception as e:
+                print(f"Warning: Skipping custom property {name} for {collection_name}: {e}")
+
+    try:
+        execution_collection = client.collections.create(
+            name=collection_name,
+            properties=properties,
+            vectorizer_config=wvc.Configure.Vectorizer.none()
+        )
+        print(f"Collection '{collection_name}' created successfully.")
+        return execution_collection
+    except Exception as e:
+        raise SchemaCreationError(f"Error during execution schema creation: {e}")
+
+def initialize_database():
+    """
+    (권장) 클라이언트와 두 개의 스키마를 모두 초기화하는 헬퍼 함수.
+    """
+    try:
+        settings = get_weaviate_settings()
+        client = get_weaviate_client(settings)
+        if client:
+            create_vectorwave_schema(client, settings)
+            create_execution_schema(client, settings)
+            return client
+    except Exception as e:
+        print(f"Failed to initialize VectorWave database: {e}")
+        return None
