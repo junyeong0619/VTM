@@ -35,6 +35,23 @@ WEAVIATE_GRPC_PORT=50051
 
 # text2vec-openai 모듈 등을 사용할 경우 OpenAI API 키가 필요합니다.
 # OPENAI_API_KEY=sk-your-key-here
+
+#(선택 사항) 커스텀 스키마 속성을 정의한 JSON 파일의 경로
+CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
+
+
+.weaviate_properties
+
+{
+"run_id": {
+"data_type": "TEXT",
+"description": "The ID of the specific test run"
+},
+"experiment_id": {
+"data_type": "INT",
+"description": "Identifier for the experiment"
+}
+}
 ```
 
 ## 🤝 기여 (Contributing)
