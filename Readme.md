@@ -1,65 +1,96 @@
 
-
-
 # VectorWave: Seamless Auto-Vectorization Framework
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[](LICENSE)
 
-## 🌟 프로젝트 소개 (Overview)
+## 🌟 Overview
 
-**VectorWave**는 파이썬 함수/메서드의 출력을 **데코레이터**를 사용하여 자동으로 **벡터 데이터베이스(Vector DB)**에 저장하고 관리하는 혁신적인 프레임워크입니다. 개발자는 데이터 수집, 임베딩 생성, 벡터 DB 저장의 복잡한 과정을 신경 쓸 필요 없이, 단 한 줄의 코드(`@vectorize`)로 함수 출력을 지능적인 벡터 데이터로 변환할 수 있습니다.
+**VectorWave** is an innovative framework that uses a **decorator** to automatically save and manage the output of Python functions/methods in a **Vector Database (Vector DB)**. Developers can convert function outputs into intelligent vector data with a single line of code (`@vectorize`), without worrying about the complex processes of data collection, embedding generation, or storage in a Vector DB.
 
-## ✨ 주요 특징 (Features)
+## ✨ Features
 
-* **`@vectorize` 데코레이터:** 함수 호출 시 반환되는 데이터를 지정된 Vector DB에 자동으로 임베딩하고 저장합니다.
-* **간결한 검색 인터페이스:** 저장된 벡터 데이터에 대한 유의미한 검색(Similarity Search) 기능을 제공하여 RAG(Retrieval-Augmented Generation) 시스템 구축을 용이하게 합니다.
+* **`@vectorize` Decorator:**
+  1.  **Static Data Collection:** Saves the function's source code, docstring, and metadata to the `VectorWaveFunctions` collection once when the script is loaded.
+  2.  **Dynamic Data Logging:** Records the execution time, success/failure status, error logs, and 'dynamic tags' to the `VectorWaveExecutions` collection every time the function is called.
+* **Concise Search Interface:** (Coming soon) Provides meaningful search capabilities (Similarity Search) for the stored vector data, facilitating the construction of RAG (Retrieval-Augmented Generation) systems.
 
-## ⚙️ 설정 (Configuration)
+## ⚙️ Configuration
 
-VectorWave는 Weaviate 데이터베이스 연결 정보를 **환경 변수** 또는 `.env` 파일을 통해 자동으로 읽어옵니다.
+VectorWave automatically reads Weaviate database connection information from **environment variables** or a `.env` file.
 
-라이브러리를 사용하는 당신의 프로젝트 루트 디렉터리(예: `main.py`가 있는 곳)에 `.env` 파일을 생성하고 필요한 값들을 설정하세요.
+Create a `.env` file in the root directory of your project (e.g., where `main.py` is located) and set the required values.
 
-### .env 파일 예시
+### .env File Example
 
 ```ini
 # .env
-# VectorWave가 연결할 Weaviate 서버의 주소입니다.
+# --- Basic Weaviate Connection Settings ---
 WEAVIATE_HOST=localhost
-
-# Weaviate 서버의 REST API 포트입니다. (기본값 8080)
 WEAVIATE_PORT=8080
-
-# Weaviate 서버의 gRPC 포트입니다. (기본값 50051)
 WEAVIATE_GRPC_PORT=50051
 
-# text2vec-openai 모듈 등을 사용할 경우 OpenAI API 키가 필요합니다.
+# --- Vectorizer Settings (if using OpenAI) ---
+# An OpenAI API key is required if using modules like text2vec-openai.
 # OPENAI_API_KEY=sk-your-key-here
 
-#(선택 사항) 커스텀 스키마 속성을 정의한 JSON 파일의 경로
+# --- [Advanced] Custom Property Settings ---
+# 1. The path to the JSON file defining custom properties to add to the schema.
 CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
 
+# 2. Environment variables to be used for 'dynamic tagging'.
+#    ("run_id" must be defined in the .weaviate_properties file)
+RUN_ID=test-run-001
+EXPERIMENT_ID=exp-abc
+```
 
-.weaviate_properties
+-----
 
+### Custom Properties and Dynamic Execution Tagging
+
+In addition to static data (function definitions) and dynamic data (execution logs), VectorWave can store user-defined metadata. This works in two steps using a combination of the `.weaviate_properties` file and `.env` environment variables.
+
+#### Step 1: Define Custom Schema (`.weaviate_properties` file)
+
+Create a JSON file at the path specified by `CUSTOM_PROPERTIES_FILE_PATH` in your `.env` file (default: `.weaviate_properties`).
+
+This file instructs VectorWave to add **new properties (columns)** to the Weaviate collections.
+
+**`.weaviate_properties` Example:**
+
+```json
 {
-"run_id": {
-"data_type": "TEXT",
-"description": "The ID of the specific test run"
-},
-"experiment_id": {
-"data_type": "INT",
-"description": "Identifier for the experiment"
-}
+  "run_id": {
+    "data_type": "TEXT",
+    "description": "The ID of the specific test run"
+  },
+  "experiment_id": {
+    "data_type": "TEXT",
+    "description": "Identifier for the experiment"
+  }
 }
 ```
 
-## 🤝 기여 (Contributing)
+* Defining it this way will add `run_id` (TEXT) and `experiment_id` (TEXT) properties to both the `VectorWaveFunctions` and `VectorWaveExecutions` collections.
 
-버그 보고, 기능 요청, 코드 기여 등 모든 형태의 기여를 환영합니다. 자세한 내용은 [CONTRIBUTING.md](https://www.google.com/search?q=CONTRIBUTING.md)를 참고해 주세요.
+#### Step 2: Dynamic Tagging (Environment Variables)
 
-## 📜 라이선스 (License)
+VectorWave takes the keys defined in the `.weaviate_properties` file (e.g., `run_id`), **capitalizes them** (e.g., `RUN_ID`), and looks for a matching **environment variable**.
 
-이 프로젝트는 MIT 라이선스에 따라 배포됩니다. 자세한 내용은 [LICENSE](https://www.google.com/search?q=LICENSE) 파일을 확인하세요.
+If `RUN_ID=test-run-001` is set in your `.env` file, VectorWave loads this `test-run-001` value into `global_custom_values`.
 
+These "global values" are automatically added like 'tags' to the **dynamic log data (`VectorWaveExecutions`)** that is collected **every time** a `@vectorize`-decorated function is executed.
 
+**Result:**
+If you run a script with `RUN_ID=test-run-001` set, all execution logs saved to the `VectorWaveExecutions` collection will include the property `{"run_id": "test-run-001"}`. This enables powerful analysis later, such as "filtering all execution logs for a specific `run_id`."
+
+*(Note: These values are tagged only on the function 'execution logs' (`VectorWaveExecutions`), not on the function 'definitions' (`VectorWaveFunctions`).)*
+
+-----
+
+## 🤝 Contributing
+
+All forms of contribution are welcome, including bug reports, feature requests, and code contributions. For details, please refer to [CONTRIBUTING.md](httpsS://www.google.com/search?q=CONTRIBUTING.md).
+
+## 📜 License
+
+This project is distributed under the MIT License. See the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
