@@ -1,7 +1,9 @@
 
+
+
 # VectorWave: Seamless Auto-Vectorization Framework
 
-[](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## 🌟 Overview
 
@@ -37,23 +39,23 @@ WEAVIATE_GRPC_PORT=50051
 # 1. The path to the JSON file defining custom properties to add to the schema.
 CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
 
-# 2. Environment variables to be used for 'dynamic tagging'.
+# 2. Environment variables to be used for 'Global Dynamic Tagging'.
 #    ("run_id" must be defined in the .weaviate_properties file)
 RUN_ID=test-run-001
 EXPERIMENT_ID=exp-abc
-```
+````
 
 -----
 
 ### Custom Properties and Dynamic Execution Tagging
 
-In addition to static data (function definitions) and dynamic data (execution logs), VectorWave can store user-defined metadata. This works in two steps using a combination of the `.weaviate_properties` file and `.env` environment variables.
+VectorWave can store user-defined metadata in both static definitions (`VectorWaveFunctions`) and dynamic logs (`VectorWaveExecutions`). This works in two steps.
 
-#### Step 1: Define Custom Schema (`.weaviate_properties` file)
+#### Step 1: Define Custom Schema (The "Allow-List")
 
-Create a JSON file at the path specified by `CUSTOM_PROPERTIES_FILE_PATH` in your `.env` file (default: `.weaviate_properties`).
+Create a JSON file at the path specified by `CUSTOM_PROPERTIES_FILE_PATH` (default: `.weaviate_properties`).
 
-This file instructs VectorWave to add **new properties (columns)** to the Weaviate collections.
+This file instructs VectorWave to add **new properties (columns)** to the Weaviate collections. This file acts as an **"allow-list"** for all custom tags.
 
 **`.weaviate_properties` Example:**
 
@@ -66,24 +68,63 @@ This file instructs VectorWave to add **new properties (columns)** to the Weavia
   "experiment_id": {
     "data_type": "TEXT",
     "description": "Identifier for the experiment"
+  },
+  "team": {
+    "data_type": "TEXT",
+    "description": "The team responsible for this function"
+  },
+  "priority": {
+    "data_type": "INT",
+    "description": "Execution priority level"
   }
 }
 ```
 
-* Defining it this way will add `run_id` (TEXT) and `experiment_id` (TEXT) properties to both the `VectorWaveFunctions` and `VectorWaveExecutions` collections.
+* Defining these will add `run_id`, `experiment_id`, `team`, and `priority` properties to *both* collections.
 
-#### Step 2: Dynamic Tagging (Environment Variables)
+#### Step 2: Dynamic Execution Tagging (Adding Values)
 
-VectorWave takes the keys defined in the `.weaviate_properties` file (e.g., `run_id`), **capitalizes them** (e.g., `RUN_ID`), and looks for a matching **environment variable**.
+When a function executes, VectorWave adds tags to the `VectorWaveExecutions` log. It does this in two ways, which are then merged:
 
-If `RUN_ID=test-run-001` is set in your `.env` file, VectorWave loads this `test-run-001` value into `global_custom_values`.
+**1. Global Tags (from Environment Variables)**
+VectorWave searches for environment variables whose names match the **uppercase** keys from Step 1 (e.g., `RUN_ID`, `EXPERIMENT_ID`). If found, their values are loaded as `global_custom_values` and added to *all* execution logs. This is ideal for run-wide metadata.
 
-These "global values" are automatically added like 'tags' to the **dynamic log data (`VectorWaveExecutions`)** that is collected **every time** a `@vectorize`-decorated function is executed.
+**2. Function-Specific Tags (from Decorator)**
+You can pass tags directly to the `@vectorize` decorator as keyword arguments (`**execution_tags`). This is ideal for function-specific metadata.
 
-**Result:**
-If you run a script with `RUN_ID=test-run-001` set, all execution logs saved to the `VectorWaveExecutions` collection will include the property `{"run_id": "test-run-001"}`. This enables powerful analysis later, such as "filtering all execution logs for a specific `run_id`."
+```python
+# --- .env file ---
+# RUN_ID=global-run-abc
+# TEAM=default-team
 
-*(Note: These values are tagged only on the function 'execution logs' (`VectorWaveExecutions`), not on the function 'definitions' (`VectorWaveFunctions`).)*
+@vectorize(
+    search_description="Process a payment",
+    sequence_narrative="...",
+    team="billing",  # <-- Function-specific tag
+    priority=1       # <-- Function-specific tag
+)
+def process_payment():
+    pass
+
+@vectorize(
+    search_description="Another function",
+    sequence_narrative="...",
+    run_id="override-run-xyz" # <-- Overrides the global tag
+)
+def other_function():
+    pass
+```
+
+**Tag Merging and Validation Rules**
+
+1.  **Validation (Most Important):** A tag (either global or specific) will **only** be saved to Weaviate if its key (e.g., `run_id`, `team`, `priority`) was first defined in your `.weaviate_properties` file (Step 1). Tags not defined in the schema will be **ignored**, and a warning will be printed on startup.
+
+2.  **Priority (Override):** If a tag key is defined in both places (e.g., a global `RUN_ID` in `.env` and a specific `run_id="override-run-xyz"` on the decorator), the **function-specific tag from the decorator will always win**.
+
+**Resulting Logs:**
+
+* `process_payment()` log will have: `{"run_id": "global-run-abc", "team": "billing", "priority": 1}`
+* `other_function()` log will have: `{"run_id": "override-run-xyz", "team": "default-team"}`
 
 -----
 
@@ -94,3 +135,4 @@ All forms of contribution are welcome, including bug reports, feature requests, 
 ## 📜 License
 
 This project is distributed under the MIT License. See the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
