@@ -25,7 +25,7 @@ class WeaviateSettings(BaseSettings):
     CUSTOM_PROPERTIES_FILE_PATH: str = ".weaviate_properties"
     custom_properties: Optional[Dict[str, Dict[str, Any]]] = None
     global_custom_values: Optional[Dict[str, Any]] = None
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8",extra='ignore')
 
 
 # @lru_cache ensures this function creates the Settings object only once (Singleton pattern)
