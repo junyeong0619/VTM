@@ -1,0 +1,14 @@
+{
+  "run_id": {
+    "data_type": "TEXT",
+    "description": "The ID of the specific test run"
+  },
+  "team": {
+    "data_type": "TEXT",
+    "description": "team that make this function"
+  },
+  "priority": {
+    "data_type": "INT",
+    "description": "execution priority"
+  }
+}
