@@ -15,31 +15,31 @@ class WeaviateBatchManager:
 
     def __init__(self):
         self._initialized = False
-        print("Initializing WeaviateBatchManager...") # print 유지
+        print("Initializing WeaviateBatchManager...")
         self.client: weaviate.WeaviateClient = None
 
         try:
-            # (get_weaviate_settings is reused as it is handled by lru_cache)            self.settings:
+            # (get_weaviate_settings is reused as it is handled by lru_cache)
             self.settings: WeaviateSettings = get_weaviate_settings()
             self.client: weaviate.WeaviateClient = get_weaviate_client(self.settings)
 
             if not self.client:
                 raise WeaviateConnectionError("Client is None, cannot configure batch.")
 
-            self.client.batch.configure(
-                batch_size=20,
-                dynamic=True,
-                timeout_retries=3,
-            )
+            # self.client.batch.configure(
+            #     batch_size=20,
+            #     dynamic=True,
+            #     timeout_retries=3,
+            # )
 
             # Register atexit: Automatically calls self.flush() on script exit
-            atexit.register(self.flush)
+            # atexit.register(self.flush)
             self._initialized = True
-            print("WeaviateBatchManager initialized and 'atexit' flush registered.") # print 유지
+            print("WeaviateBatchManager initialized and 'atexit' flush registered.")
 
         except Exception as e:
             # Prevents VectorWave from stopping the main app upon DB connection failure
-            print(f"Failed to initialize WeaviateBatchManager: {e}. Batching will be disabled.") # print 유지
+            print(f"Failed to initialize WeaviateBatchManager: {e}. Batching will be disabled.")
 
     def add_object(self, collection: str, properties: dict, uuid: str = None):
         """
@@ -50,41 +50,14 @@ class WeaviateBatchManager:
             return
 
         try:
-            self.client.batch.add_object(
-                collection=collection,
+            self.client.collections.get(collection).data.insert(
                 properties=properties,
                 uuid=uuid
             )
 
         except Exception as e:
-            print(f"Error: Failed to add object to batch (Collection: {collection}): {e}") # print 유지
+            print(f"Error: Failed to add object to batch (Collection: {collection}): {e}")
 
-    def flush(self):
-        """
-        Forcibly sends all remaining objects in the batch queue to Weaviate.
-        (Automatically called on script exit by 'atexit')
-        """
-        if not self._initialized or not self.client:
-            return
-
-        if len(self.client.batch) > 0:
-            print(f"Flushing Weaviate batch ({len(self.client.batch)} items)...") # print 유지
-            try:
-                result = self.client.batch.flush()
-
-                errors = []
-                for res in result:
-                    if "errors" in res.get("result", {}):
-                        errors.append(res["result"]["errors"])
-
-                if errors:
-                    print(f"Error: Errors occurred during batch flush: {errors}") # print 유지
-                else:
-                    print("Batch flush complete.")
-            except Exception as e:
-                print(f"Error: Exception during final batch flush: {e}") # print 유지
-        else:
-            print("Weaviate batch queue is empty. No flush needed.") # print 유지
 
 
 @lru_cache(None)
