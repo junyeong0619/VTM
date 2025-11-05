@@ -18,6 +18,11 @@ def mock_deps(monkeypatch):
     mock_client.batch.add_object = MagicMock()
     mock_client.batch.flush = MagicMock()
 
+    mock_collection_data = MagicMock()
+    mock_collection = MagicMock()
+    mock_collection.data = mock_collection_data
+    mock_client.collections.get = MagicMock(return_value=mock_collection)
+
     # Mock get_weaviate_client
     mock_get_client = MagicMock(return_value=mock_client)
     monkeypatch.setattr("vectorwave.batch.batch.get_weaviate_client", mock_get_client)
@@ -59,15 +64,6 @@ def test_batch_manager_initialization(mock_deps):
     mock_deps["get_settings"].assert_called_once()
     mock_deps["get_client"].assert_called_once_with(mock_deps["settings"])
 
-    # Check if client.batch.configure was called with the correct arguments (dynamic=True)
-    mock_deps["client"].batch.configure.assert_called_once_with(
-        batch_size=20,
-        dynamic=True,
-        timeout_retries=3
-    )
-
-    # Check if atexit.register was called with the manager.flush function
-    mock_deps["atexit"].assert_called_once_with(manager.flush)
     assert manager._initialized is True
 
 def test_batch_manager_init_failure(monkeypatch):
@@ -93,32 +89,9 @@ def test_add_object_calls_client_batch(mock_deps):
 
     manager.add_object(collection="TestCollection", properties=props, uuid="test-uuid")
 
-    mock_deps["client"].batch.add_object.assert_called_once_with(
-        collection="TestCollection",
+    mock_deps["client"].collections.get.assert_called_once_with("TestCollection")
+
+    mock_deps["client"].collections.get.return_value.data.insert.assert_called_once_with(
         properties=props,
         uuid="test-uuid"
-    )
-
-def test_flush_calls_client_flush_when_items_exist(mock_deps):
-    """
-    Case 5: Test if flush() calls client.batch.flush when items exist in the queue (len > 0)
-    """
-    # Assume items are in the queue (set len(batch) to return 1)
-    mock_deps["client"].batch.__len__.return_value = 1
-
-    manager = get_batch_manager()
-    manager.flush()
-
-    mock_deps["client"].batch.flush.assert_called_once()
-
-def test_flush_skips_when_empty(mock_deps):
-    """
-    Case 6: Test if flush() does not call client.batch.flush when the queue is empty (len == 0)
-    """
-    # Assume the queue is empty (len(batch) returns 0)
-    mock_deps["client"].batch.__len__.return_value = 0
-
-    manager = get_batch_manager()
-    manager.flush()
-
-    mock_deps["client"].batch.flush.assert_not_called()
+)
