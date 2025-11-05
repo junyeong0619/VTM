@@ -1,0 +1,27 @@
+version: '3.4'
+
+services:
+  weaviate:
+    image: semitechnologies/weaviate:latest
+    ports:
+      - "8080:8080" # API 포트 (스크립트용)
+      - "50051:50051"
+    environment:
+      ENABLE_MODULES: 'text2vec-openai'
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-openai'
+      OPENAI_APIKEY: ${OPENAI_API_KEY}
+      AUTHENTICATION_ANONYMOUS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      CLUSTER_HOSTNAME: 'node1'
+    volumes:
+      - ./weaviate-data:/var/lib/weaviate
+
+  console:
+    image: semitechnologies/weaviate-console:latest
+    ports:
+      - "8081:8080"
+    environment:
+      WEAVIATE_URL: "http://weaviate:8080"
+
+volumes:
+  weaviate-data:
