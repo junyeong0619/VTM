@@ -1,5 +1,7 @@
 import weaviate
 import weaviate.classes.config as wvc # (wvc = Weaviate Classes Config)
+import weaviate.config as wvc_config
+from weaviate.config import AdditionalConfig
 from vectorwave.models.db_config import WeaviateSettings
 from vectorwave.exception.exceptions import (
     WeaviateConnectionError,
@@ -28,7 +30,17 @@ def get_weaviate_client(settings: WeaviateSettings) -> weaviate.WeaviateClient:
         client = weaviate.connect_to_local(
             host=settings.WEAVIATE_HOST,
             port=settings.WEAVIATE_PORT,
-            grpc_port=settings.WEAVIATE_GRPC_PORT
+            grpc_port=settings.WEAVIATE_GRPC_PORT,
+            # batch_config=wvc_config.BatchConfig(
+            #     dynamic=True,
+            #     batch_size=20,
+            #     timeout_retries=3
+            # )
+            additional_config=AdditionalConfig(
+                    dynamic=True,
+                    batch_size=20,
+                    timeout_retries=3
+            )
         )
     except WeaviateClientConnectionError as e:
         raise WeaviateConnectionError(f"Failed to connect to Weaviate: {e}")
@@ -142,7 +154,7 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
             properties=all_properties,
 
             # 7. Vectorizer Configuration
-            vectorizer_config=wvc.Configure.Vectorizer.text2vec_openai(
+            vector_config=wvc.Configure.Vectorizer.text2vec_openai(
                 # OpenAI API key must be set via environment variable (OPENAI_API_KEY).
                 vectorize_collection_name=settings.IS_VECTORIZE_COLLECTION_NAME, # Include collection name in vectorization
             ),
@@ -227,7 +239,7 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
         execution_collection = client.collections.create(
             name=collection_name,
             properties=properties,
-            vectorizer_config=wvc.Configure.Vectorizer.none()
+            vector_config=wvc.Configure.Vectorizer.none()
         )
         print(f"Collection '{collection_name}' created successfully.")
         return execution_collection

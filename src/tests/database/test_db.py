@@ -54,7 +54,8 @@ def test_get_weaviate_client_success(mock_connect_to_local, test_settings):
     mock_connect_to_local.assert_called_once_with(
         host=test_settings.WEAVIATE_HOST,
         port=test_settings.WEAVIATE_PORT,
-        grpc_port=test_settings.WEAVIATE_GRPC_PORT
+        grpc_port=test_settings.WEAVIATE_GRPC_PORT,
+        additional_config=ANY
     )
     mock_client.is_ready.assert_called_once()
     assert client == mock_client
