@@ -8,8 +8,8 @@ from vectorwave.exception.exceptions import (
     WeaviateNotReadyError,
     SchemaCreationError
 )
+from functools import lru_cache
 from weaviate.exceptions import WeaviateConnectionError as WeaviateClientConnectionError
-
 from vectorwave.models.db_config import get_weaviate_settings
 
 
@@ -31,11 +31,6 @@ def get_weaviate_client(settings: WeaviateSettings) -> weaviate.WeaviateClient:
             host=settings.WEAVIATE_HOST,
             port=settings.WEAVIATE_PORT,
             grpc_port=settings.WEAVIATE_GRPC_PORT,
-            # batch_config=wvc_config.BatchConfig(
-            #     dynamic=True,
-            #     batch_size=20,
-            #     timeout_retries=3
-            # )
             additional_config=AdditionalConfig(
                     dynamic=True,
                     batch_size=20,
@@ -52,6 +47,17 @@ def get_weaviate_client(settings: WeaviateSettings) -> weaviate.WeaviateClient:
         raise WeaviateNotReadyError("Connected to Weaviate, but the server is not ready.")
 
     print("Weaviate client connected successfully.")
+    return client
+
+@lru_cache()
+def get_cached_client() -> weaviate.WeaviateClient:
+    """
+    Singleton factory: Gets settings and returns a single client instance.
+    This function IS cached.
+    """
+    print("Creating and caching new Weaviate client instance...")
+    settings = get_weaviate_settings()
+    client = get_weaviate_client(settings)
     return client
 
 
@@ -252,7 +258,7 @@ def initialize_database():
     """
     try:
         settings = get_weaviate_settings()
-        client = get_weaviate_client(settings)
+        client = get_cached_client()
         if client:
             create_vectorwave_schema(client, settings)
             create_execution_schema(client, settings)
