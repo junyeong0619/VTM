@@ -1,9 +1,7 @@
 
-
-
 # VectorWave: Seamless Auto-Vectorization Framework
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[](https://www.google.com/search?q=LICENSE)
 
 ## 🌟 Overview
 
@@ -14,7 +12,75 @@
 * **`@vectorize` Decorator:**
   1.  **Static Data Collection:** Saves the function's source code, docstring, and metadata to the `VectorWaveFunctions` collection once when the script is loaded.
   2.  **Dynamic Data Logging:** Records the execution time, success/failure status, error logs, and 'dynamic tags' to the `VectorWaveExecutions` collection every time the function is called.
-* **Concise Search Interface:** (Coming soon) Provides meaningful search capabilities (Similarity Search) for the stored vector data, facilitating the construction of RAG (Retrieval-Augmented Generation) systems.
+* **Search Interface:** Provides `search_functions` (for vector search) and `search_executions` (for log filtering) to facilitate the construction of RAG and monitoring systems.
+
+## 🚀 Usage
+
+VectorWave consists of 'storing' via decorators and 'searching' via functions.
+
+```python
+import time
+from vectorwave import (
+    vectorize, 
+    initialize_database, 
+    search_functions, 
+    search_executions
+)
+
+# 1. (Required) Initialize the database
+#    This only needs to be called once when the script starts.
+try:
+    client = initialize_database()
+    print("VectorWave DB initialized successfully.")
+except Exception as e:
+    print(f"DB initialization failed: {e}")
+    exit()
+
+# 2. [Store] Use the @vectorize decorator
+#    On script load, this function's definition (source code, description) is saved to the DB.
+@vectorize(
+    search_description="Charges a user in the payment system.",
+    sequence_narrative="Returns a receipt ID upon successful payment.",
+    team="billing",  # Custom tag
+    priority=1       # Custom tag
+)
+def process_payment(user_id: str, amount: int):
+    """Processes a payment for a given user ID and amount."""
+    print(f"  [EXEC] Processing ${amount} payment for {user_id}...")
+    time.sleep(0.5)
+    # When this function is called, its execution log (success, 0.5s duration) is saved to the DB.
+    return {"status": "success", "receipt_id": f"receipt_{user_id}_{amount}"}
+
+# --- Execute the functions ---
+process_payment("user_123", 100)
+process_payment("user_456", 50)
+
+# 3. [Search ①] Search function definitions (for RAG)
+#    Find functions related to 'payment' using natural language.
+print("\n--- Searching for 'payment' functions ---")
+payment_funcs = search_functions(
+    query="user payment processing",
+    limit=3
+)
+for func in payment_funcs:
+    print(f"  - Function: {func['properties']['function_name']}")
+    print(f"  - Description: {func['properties']['search_description']}")
+    print(f"  - Similarity (Distance): {func['metadata'].distance:.4f}")
+
+# 4. [Search ②] Search execution logs (for Monitoring)
+#    Find execution logs for the 'billing' team.
+print("\n--- Searching for 'billing' team execution logs (latest first) ---")
+billing_logs = search_executions(
+    limit=5,
+    filters={"team": "billing"},
+    sort_by="timestamp_utc",
+    sort_ascending=False
+)
+for log in billing_logs:
+    print(f"  - {log['timestamp_utc']} / {log['status']} / {log['duration_ms']:.2f}ms")
+
+# (Client is managed automatically on script exit)
+```
 
 ## ⚙️ Configuration
 
@@ -43,7 +109,7 @@ CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
 #    ("run_id" must be defined in the .weaviate_properties file)
 RUN_ID=test-run-001
 EXPERIMENT_ID=exp-abc
-````
+```
 
 -----
 
@@ -130,9 +196,8 @@ def other_function():
 
 ## 🤝 Contributing
 
-All forms of contribution are welcome, including bug reports, feature requests, and code contributions. For details, please refer to [CONTRIBUTING.md](httpsS://www.google.com/search?q=CONTRIBUTING.md).
+All forms of contribution are welcome, including bug reports, feature requests, and code contributions. For details, please refer to [CONTRIBUTING.md](https://www.google.com/search?q=httpsS://www.google.com/search%3Fq%3DCONTRIBUTING.md).
 
 ## 📜 License
 
-This project is distributed under the MIT License. See the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
-
+This project is distributed under the MIT License. See the [LICENSE](https://www.google.com/search?q=httpsS://www.google.com/search%3Fq%3DLICENSE) file for details.

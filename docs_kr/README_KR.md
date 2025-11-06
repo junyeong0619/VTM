@@ -1,18 +1,87 @@
 
 # VectorWave: Seamless Auto-Vectorization Framework
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[](https://www.google.com/search?q=LICENSE)
 
 ## 🌟 프로젝트 소개 (Overview)
 
-**VectorWave**는 파이썬 함수/메서드의 출력을 **데코레이터**를 사용하여 자동으로 **벡터 데이터베이스(Vector DB)**에 저장하고 관리하는 혁신적인 프레임워크입니다. 개발자는 데이터 수집, 임베딩 생성, 벡터 DB 저장의 복잡한 과정을 신경 쓸 필요 없이, 단 한 줄의 코드(`@vectorize`)로 함수 출력을 지능적인 벡터 데이터로 변환할 수 있습니다.
+**VectorWave**는 파이썬 함수/메서드의 출력을 **데코레이터**를 사용하여 자동으로 \*\*벡터 데이터베이스(Vector DB)\*\*에 저장하고 관리하는 혁신적인 프레임워크입니다. 개발자는 데이터 수집, 임베딩 생성, 벡터 DB 저장의 복잡한 과정을 신경 쓸 필요 없이, 단 한 줄의 코드(`@vectorize`)로 함수 출력을 지능적인 벡터 데이터로 변환할 수 있습니다.
 
 ## ✨ 주요 특징 (Features)
 
 * **`@vectorize` 데코레이터:**
-    1.  **정적 데이터 수집:** 스크립트 로드 시, 함수의 소스 코드, 독스트링, 메타데이터를 `VectorWaveFunctions` 컬렉션에 1회 저장합니다.
-    2.  **동적 데이터 로깅:** 함수가 호출될 때마다 실행 시간, 성공/실패 상태, 에러 로그, 그리고 '동적 태그'를 `VectorWaveExecutions` 컬렉션에 기록합니다.
-* **간결한 검색 인터페이스:** (향후 제공 예정) 저장된 벡터 데이터에 대한 유의미한 검색(Similarity Search) 기능을 제공하여 RAG(Retrieval-Augmented Generation) 시스템 구축을 용이하게 합니다.
+  1.  **정적 데이터 수집:** 스크립트 로드 시, 함수의 소스 코드, 독스트링, 메타데이터를 `VectorWaveFunctions` 컬렉션에 1회 저장합니다.
+  2.  **동적 데이터 로깅:** 함수가 호출될 때마다 실행 시간, 성공/실패 상태, 에러 로그, 그리고 '동적 태그'를 `VectorWaveExecutions` 컬렉션에 기록합니다.
+* **검색 인터페이스:** 저장된 벡터 데이터(함수 정의)와 로그(실행 기록)를 검색하는 `search_functions` 및 `search_executions` 함수를 제공하여 RAG 및 모니터링 시스템 구축을 용이하게 합니다.
+
+## 🚀 사용법 (Usage)
+
+VectorWave는 데코레이터를 통한 '저장'과 함수를 통한 '검색'으로 구성됩니다.
+
+```python
+import time
+from vectorwave import (
+    vectorize, 
+    initialize_database, 
+    search_functions, 
+    search_executions
+)
+
+# 1. (필수) 데이터베이스 초기화
+#    스크립트 시작 시 한 번만 호출하면 됩니다.
+try:
+    client = initialize_database()
+    print("VectorWave DB 초기화 성공.")
+except Exception as e:
+    print(f"DB 초기화 실패: {e}")
+    exit()
+
+# 2. [저장] @vectorize 데코레이터 사용
+#    스크립트 로드 시, 이 함수의 정의(소스코드, 설명 등)가 DB에 저장됩니다.
+@vectorize(
+    search_description="결제 시스템에서 사용자에게 요금을 청구합니다.",
+    sequence_narrative="결제가 완료되면 영수증 ID를 반환합니다.",
+    team="billing",  # 커스텀 태그
+    priority=1       # 커스텀 태그
+)
+def process_payment(user_id: str, amount: int):
+    """사용자 ID와 금액을 받아 결제를 처리하는 함수"""
+    print(f"  [실행] {user_id}의 {amount}원 결제 처리 중...")
+    time.sleep(0.5)
+    # 함수가 호출되면, 이 실행 로그(성공, 0.5초 소요 등)가 DB에 저장됩니다.
+    return {"status": "success", "receipt_id": f"receipt_{user_id}_{amount}"}
+
+# --- 함수 실행 ---
+process_payment("user_123", 10000)
+process_payment("user_456", 500)
+
+# 3. [검색 ①] 함수 정의 검색 (RAG 용도)
+#    '결제'와 관련된 함수를 자연어(벡터)로 검색합니다.
+print("\n--- '결제' 관련 함수 검색 ---")
+payment_funcs = search_functions(
+    query="사용자 결제 처리 기능",
+    limit=3
+)
+for func in payment_funcs:
+    print(f"  - 함수명: {func['properties']['function_name']}")
+    print(f"  - 설명: {func['properties']['search_description']}")
+    print(f"  - 유사도(거리): {func['metadata'].distance:.4f}")
+
+# 4. [검색 ②] 함수 실행 로그 검색 (모니터링 용도)
+#    'billing' 팀의 실행 기록을 검색합니다.
+print("\n--- 'billing' 팀 실행 로그 검색 (최신순) ---")
+billing_logs = search_executions(
+    limit=5,
+    filters={"team": "billing"},
+    sort_by="timestamp_utc",
+    sort_ascending=False
+)
+for log in billing_logs:
+    print(f"  - {log['timestamp_utc']} / {log['status']} / {log['duration_ms']:.2f}ms")
+
+# (스크립트 종료 시 client 자동 관리)
+
+```
 
 ## ⚙️ 설정 (Configuration)
 
@@ -41,7 +110,7 @@ CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
 #    (.weaviate_properties 파일에 "run_id"가 정의되어 있어야 함)
 RUN_ID=test-run-001
 EXPERIMENT_ID=exp-abc
-````
+```
 
 -----
 
@@ -128,9 +197,8 @@ def other_function():
 
 ## 🤝 기여 (Contributing)
 
-버그 보고, 기능 요청, 코드 기여 등 모든 형태의 기여를 환영합니다. 자세한 내용은 [CONTRIBUTING.md](httpsS://www.google.com/search?q=CONTRIBUTING.md)를 참고해 주세요.
+버그 보고, 기능 요청, 코드 기여 등 모든 형태의 기여를 환영합니다. 자세한 내용은 [CONTRIBUTING.md](https://www.google.com/search?q=httpsS://www.google.com/search%3Fq%3DCONTRIBUTING.md)를 참고해 주세요.
 
 ## 📜 라이선스 (License)
 
 이 프로젝트는 MIT 라이선스에 따라 배포됩니다. 자세한 내용은 [LICENSE](https://www.google.com/search?q=LICENSE) 파일을 확인하세요.
-
