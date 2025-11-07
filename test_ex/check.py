@@ -70,19 +70,12 @@ if client:
                 config = executions_col.config.get()
                 has_timestamp_prop = False
                 if config.properties:
-                    has_timestamp_prop = any(prop.name == "execution_timestamp" for prop in config.properties)
+                    has_timestamp_prop = any(prop.name == "timestamp_utc" for prop in config.properties)
 
                 if has_timestamp_prop:
-                    sort_order = wvc.query.Sort.by_property("execution_timestamp", ascending=False)
+                    sort_order = wvc.query.Sort.by_property("timestamp_utc", ascending=False)
                 else:
-                    # If 'execution_timestamp' is not found, look for other timestamp fields (e.g., 'start_time')
-                    # (If 'start_time' is also not found, sorting will not occur)
-                    has_start_time_prop = any(prop.name == "start_time" for prop in config.properties)
-                    if has_start_time_prop:
-                        print(" (Note: Sorting by 'start_time'.)")
-                        sort_order = wvc.query.Sort.by_property("start_time", ascending=False)
-                    else:
-                        print(" (Warning: Skipping sort. 'execution_timestamp' or 'start_time' property not found.)")
+                    print(" (Warning: Skipping sort. 'timestamp_utc' property not found.)")
 
             except Exception as e:
                 print(f" (Warning: Error during property check, skipping sort: {e})")

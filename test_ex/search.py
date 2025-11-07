@@ -102,6 +102,65 @@ def run_tests():
     print("\n" + "="*40)
     print("Search test complete.")
     print("="*40)
+    print("\n[Scenario 4: Trace Grouping with a Single Trace ID]")
+
+    trace_id_to_find = None
+
+    # 4a. Retrieve the trace_id from the latest 'process_payment' log
+    try:
+        print("  (1/2) Retrieving the latest trace_id for 'process_payment'...")
+        latest_root_span = search_executions(
+            limit=1,
+            filters={"function_name": "process_payment"},
+            sort_by="timestamp_utc",
+            sort_ascending=False
+        )
+
+        if latest_root_span and latest_root_span[0].get("trace_id"):
+            trace_id_to_find = latest_root_span[0]["trace_id"]
+            print(f"  -> Target Trace ID: {trace_id_to_find}")
+        else:
+            print("  -> Error: Could not find 'process_payment' log or trace_id.")
+            print("     Please ensure 'example.py' has been executed first.")
+
+    except Exception as e:
+        print(f"  [Error] Error while retrieving trace_id: {e}")
+
+    # 4b. Search all spans associated with the found trace_id
+    if trace_id_to_find:
+        try:
+            print(f"  (2/2) Searching all spans for Trace ID ({trace_id_to_find[:8]}...)...")
+
+            trace_spans = search_executions(
+                limit=10,
+                filters={"trace_id": trace_id_to_find},
+                sort_by="timestamp_utc",
+                sort_ascending=True # Sort by time ascending
+            )
+
+            print(f"\n  --- 🚀 Single Workflow: {trace_id_to_find} ---")
+            total_duration = 0
+
+            for i, span in enumerate(trace_spans):
+                func_name = span.get('function_name', 'N/A')
+                duration = span.get('duration_ms', 0)
+                total_duration += duration
+
+                print(f"    [Span {i+1}] {func_name} ({duration:.2f} ms)")
+
+                # Print captured arguments (only non-None values)
+                args = {k: v for k, v in span.items() if k in ['user_id', 'amount', 'receipt_id'] and v is not None}
+                if args:
+                    print(f"      -> Args: {args}")
+
+            print("  --------------------------------------------------")
+            print(f"  -> Total {len(trace_spans)} spans found, Total duration: {total_duration:.2f} ms")
+
+            if len(trace_spans) == 3:
+                print("  -> [SUCCESS] Root span (1) and child spans (2) were successfully grouped.")
+
+        except Exception as e:
+            print(f"  [Error] Error during span search: {e}")
 
 
 if __name__ == "__main__":
