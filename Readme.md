@@ -7,16 +7,23 @@
 
 **VectorWave** is an innovative framework that uses a **decorator** to automatically save and manage the output of Python functions/methods in a **Vector Database (Vector DB)**. Developers can convert function outputs into intelligent vector data with a single line of code (`@vectorize`), without worrying about the complex processes of data collection, embedding generation, or storage in a Vector DB.
 
+---
+
 ## ✨ Features
 
 * **`@vectorize` Decorator:**
   1.  **Static Data Collection:** Saves the function's source code, docstring, and metadata to the `VectorWaveFunctions` collection once when the script is loaded.
   2.  **Dynamic Data Logging:** Records the execution time, success/failure status, error logs, and 'dynamic tags' to the `VectorWaveExecutions` collection every time the function is called.
+* **Distributed Tracing:** By combining the `@vectorize` and `@trace_span` decorators, you can analyze the execution of complex multi-step workflows, grouped under a single **`trace_id`**.
 * **Search Interface:** Provides `search_functions` (for vector search) and `search_executions` (for log filtering) to facilitate the construction of RAG and monitoring systems.
+
+---
 
 ## 🚀 Usage
 
-VectorWave consists of 'storing' via decorators and 'searching' via functions.
+VectorWave consists of 'storing' via decorators and 'searching' via functions, and now includes **execution flow tracing**.
+
+### 1. (Required) Initialize the Database and Configuration
 
 ```python
 import time
@@ -26,37 +33,69 @@ from vectorwave import (
     search_functions, 
     search_executions
 )
+# [ADDITION] Import trace_span separately for distributed tracing.
+from vectorwave.monitoring.tracer import trace_span 
 
-# 1. (Required) Initialize the database
-#    This only needs to be called once when the script starts.
+# This only needs to be called once when the script starts.
 try:
     client = initialize_database()
     print("VectorWave DB initialized successfully.")
 except Exception as e:
     print(f"DB initialization failed: {e}")
     exit()
+````
 
-# 2. [Store] Use the @vectorize decorator
-#    On script load, this function's definition (source code, description) is saved to the DB.
+### 2\. [Store] Use `@vectorize` with Distributed Tracing
+
+The `@vectorize` acts as the **Root** for tracing, and `@trace_span` is used on internal functions to group the execution flow under a single `trace_id`.
+
+```python
+# --- Child Span Function: Captures arguments ---
+@trace_span(attributes_to_capture=['user_id', 'amount'])
+def step_1_validate_payment(user_id: str, amount: int):
+    """(Span) Payment validation. Records user_id and amount in the log."""
+    print(f"  [SPAN 1] Validating payment for {user_id}...")
+    time.sleep(0.1)
+    return True
+
+@trace_span(attributes_to_capture=['user_id', 'receipt_id'])
+def step_2_send_receipt(user_id: str, receipt_id: str):
+    """(Span) Sends the receipt."""
+    print(f"  [SPAN 2] Sending receipt {receipt_id}...")
+    time.sleep(0.2)
+
+
+# --- Root Function (@trace_root role) ---
 @vectorize(
     search_description="Charges a user in the payment system.",
     sequence_narrative="Returns a receipt ID upon successful payment.",
-    team="billing",  # Custom tag
-    priority=1       # Custom tag
+    team="billing",  # <-- Custom Tag (recorded in all execution logs)
+    priority=1       # <-- Custom Tag (execution priority)
 )
 def process_payment(user_id: str, amount: int):
-    """Processes a payment for a given user ID and amount."""
-    print(f"  [EXEC] Processing ${amount} payment for {user_id}...")
-    time.sleep(0.5)
-    # When this function is called, its execution log (success, 0.5s duration) is saved to the DB.
-    return {"status": "success", "receipt_id": f"receipt_{user_id}_{amount}"}
+    """(Root Span) Executes the user payment workflow."""
+    print(f"  [ROOT EXEC] process_payment: Starting workflow for {user_id}...")
+    
+    # When calling child functions, the same trace_id is automatically inherited via ContextVar.
+    step_1_validate_payment(user_id=user_id, amount=amount) 
+    
+    receipt_id = f"receipt_{user_id}_{amount}"
+    step_2_send_receipt(user_id=user_id, receipt_id=receipt_id)
 
-# --- Execute the functions ---
-process_payment("user_123", 100)
-process_payment("user_456", 50)
+    print(f"  [ROOT DONE] process_payment")
+    return {"status": "success", "receipt_id": receipt_id}
 
-# 3. [Search ①] Search function definitions (for RAG)
-#    Find functions related to 'payment' using natural language.
+# --- Execute the Function ---
+print("Now calling 'process_payment'...")
+# This single call records 3 execution logs (spans) in the DB,
+# all grouped under one 'trace_id'.
+process_payment("user_789", 5000)
+```
+
+### 3\. [Search ①] Function Definition Search (for RAG)
+
+```python
+# Search for functions related to 'payment' using natural language (vector search).
 print("\n--- Searching for 'payment' functions ---")
 payment_funcs = search_functions(
     query="user payment processing",
@@ -66,21 +105,42 @@ for func in payment_funcs:
     print(f"  - Function: {func['properties']['function_name']}")
     print(f"  - Description: {func['properties']['search_description']}")
     print(f"  - Similarity (Distance): {func['metadata'].distance:.4f}")
+```
 
-# 4. [Search ②] Search execution logs (for Monitoring)
-#    Find execution logs for the 'billing' team.
-print("\n--- Searching for 'billing' team execution logs (latest first) ---")
-billing_logs = search_executions(
-    limit=5,
-    filters={"team": "billing"},
+### 4\. [Search ②] Execution Log Search (Monitoring and Tracing)
+
+The `search_executions` function can now search for all related execution logs (spans) based on the `trace_id`.
+
+```python
+# 1. Find the Trace ID of a specific workflow (process_payment).
+latest_payment_span = search_executions(
+    limit=1, 
+    filters={"function_name": "process_payment"},
     sort_by="timestamp_utc",
     sort_ascending=False
 )
-for log in billing_logs:
-    print(f"  - {log['timestamp_utc']} / {log['status']} / {log['duration_ms']:.2f}ms")
+trace_id = latest_payment_span[0]["trace_id"] 
 
-# (Client is managed automatically on script exit)
+# 2. Search all spans belonging to that Trace ID, sorted chronologically.
+print(f"\n--- Full Trace for ID ({trace_id[:8]}...) ---")
+trace_spans = search_executions(
+    limit=10,
+    filters={"trace_id": trace_id},
+    sort_by="timestamp_utc",
+    sort_ascending=True # Ascending sort for workflow flow analysis
+)
+
+for i, span in enumerate(trace_spans):
+    print(f"  - [Span {i+1}] {span['function_name']} ({span['duration_ms']:.2f}ms)")
+    # Captured arguments (user_id, amount, etc.) are displayed for the child spans.
+    
+# Example Output:
+# - [Span 1] step_1_validate_payment (100.81ms)
+# - [Span 2] step_2_send_receipt (202.06ms)
+# - [Span 3] process_payment (333.18ms)
 ```
+
+-----
 
 ## ⚙️ Configuration
 
@@ -157,7 +217,7 @@ This file instructs VectorWave to add **new properties (columns)** to the Weavia
 When a function executes, VectorWave adds tags to the `VectorWaveExecutions` log. It does this in two ways, which are then merged:
 
 **1. Global Tags (from Environment Variables)**
-VectorWave searches for environment variables whose names match the **uppercase** keys from Step 1 (e.g., `RUN_ID`, `EXPERIMENT_ID`). If found, their values are loaded as `global_custom_values` and added to *all* execution logs. This is ideal for run-wide metadata.
+VectorWave searches for environment variables whose names match the **uppercase** keys from Step 1 (e.g., `RUN_ID`, `EXPERIMENT_ID`) and uses these for run-wide metadata.
 
 **2. Function-Specific Tags (from Decorator)**
 You can pass tags directly to the `@vectorize` decorator as keyword arguments (`**execution_tags`). This is ideal for function-specific metadata.
@@ -205,3 +265,4 @@ All forms of contribution are welcome, including bug reports, feature requests, 
 ## 📜 License
 
 This project is distributed under the MIT License. See the [LICENSE](https://www.google.com/search?q=httpsS://www.google.com/search%3Fq%3DLICENSE) file for details.
+
