@@ -8,6 +8,9 @@ from ..models.db_config import get_weaviate_settings, WeaviateSettings
 from .db import get_cached_client
 from ..exception.exceptions import WeaviateConnectionError
 
+import uuid
+from datetime import datetime
+
 
 def _build_weaviate_filters(filters: Optional[Dict[str, Any]]) -> _Filters | None:
     if not filters:
@@ -83,8 +86,15 @@ def search_executions(
             filters=weaviate_filter,
             sort=weaviate_sort
         )
+        results = []
+        for obj in response.objects:
+            props = obj.properties.copy()
+            for key, value in props.items():
+                if isinstance(value, uuid.UUID) or isinstance(value, datetime):
+                    props[key] = str(value)
+            results.append(props)
 
-        return [obj.properties for obj in response.objects]
+        return results
 
     except Exception as e:
         raise WeaviateConnectionError(f"Failed to execute 'search_executions': {e}")
