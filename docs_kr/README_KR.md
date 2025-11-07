@@ -98,9 +98,13 @@ WEAVIATE_HOST=localhost
 WEAVIATE_PORT=8080
 WEAVIATE_GRPC_PORT=50051
 
-# --- Vectorizer 설정 (OpenAI 사용 시) ---
+# --- Vectorizer 및 Generative 모듈 설정 ---
+# (기본값: text2vec-openai) 'none'으로 설정하면 벡터화를 비활성화합니다.
+VECTORIZER_CONFIG=text2vec-openai
+# (기본값: generative-openai)
+GENERATIVE_CONFIG=generative-openai
 # text2vec-openai 모듈 등을 사용할 경우 OpenAI API 키가 필요합니다.
-# OPENAI_API_KEY=sk-your-key-here
+OPENAI_API_KEY=sk-your-key-here
 
 # --- [고급] 커스텀 속성 설정 ---
 # 1. 스키마에 추가할 커스텀 속성을 정의한 JSON 파일의 경로입니다.
