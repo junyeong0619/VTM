@@ -3,9 +3,12 @@ from unittest.mock import patch, MagicMock
 import inspect
 from weaviate.util import generate_uuid5
 
-# 테스트 대상
 from vectorwave.core.decorator import vectorize
 from vectorwave.models.db_config import WeaviateSettings
+
+from vectorwave.batch.batch import get_batch_manager as real_get_batch_manager
+from vectorwave.database.db import get_cached_client as real_get_cached_client
+from vectorwave.models.db_config import get_weaviate_settings as real_get_settings
 
 
 @pytest.fixture
@@ -13,18 +16,17 @@ def mock_decorator_deps(monkeypatch):
     """
     Mocks dependencies for decorator.py (get_batch_manager, get_weaviate_settings)
     """
-    # Mock get_batch_manager
+    # 1. Mock BatchManager
     mock_batch_manager = MagicMock()
     mock_batch_manager.add_object = MagicMock()
     mock_get_batch_manager = MagicMock(return_value=mock_batch_manager)
 
+    # 2. Mock Settings
     mock_custom_props = {
         "run_id": {"data_type": "TEXT"},
         "team": {"data_type": "TEXT"},
         "priority": {"data_type": "INT"}
     }
-
-    # Mock get_weaviate_settings
     mock_settings = WeaviateSettings(
         COLLECTION_NAME="TestFunctions",
         EXECUTION_COLLECTION_NAME="TestExecutions",
@@ -33,9 +35,27 @@ def mock_decorator_deps(monkeypatch):
     )
     mock_get_settings = MagicMock(return_value=mock_settings)
 
-    # patch.dict applies to imports inside decorator.py
+    mock_client = MagicMock()
+    mock_get_client = MagicMock(return_value=mock_client)
+
+
+    # --- decorator.py ---
     monkeypatch.setattr("vectorwave.core.decorator.get_batch_manager", mock_get_batch_manager)
     monkeypatch.setattr("vectorwave.core.decorator.get_weaviate_settings", mock_get_settings)
+
+    # --- tracer.py ---
+    monkeypatch.setattr("vectorwave.monitoring.tracer.get_batch_manager", mock_get_batch_manager)
+    monkeypatch.setattr("vectorwave.monitoring.tracer.get_weaviate_settings", mock_get_settings)
+
+    # --- batch.py (tracer가 get_batch_manager()를 호출할 때 사용) ---
+    # WeaviateBatchManager.__init__이 실패하지 않도록 패치
+    monkeypatch.setattr("vectorwave.batch.batch.get_weaviate_client", mock_get_client)
+    monkeypatch.setattr("vectorwave.batch.batch.get_weaviate_settings", mock_get_settings)
+
+    # 5. Clear caches to ensure mocks are used
+    real_get_batch_manager.cache_clear()
+    real_get_cached_client.cache_clear()
+    real_get_settings.cache_clear()
 
     return {
         "get_batch": mock_get_batch_manager,
@@ -49,12 +69,13 @@ def mock_decorator_deps(monkeypatch):
 def mock_decorator_deps_no_props(monkeypatch):
     """
     Fixture variant where settings.custom_properties is None
-    (Simulates .weaviate_properties file not found or empty).
     """
+    # 1. Mock BatchManager
     mock_batch_manager = MagicMock()
     mock_batch_manager.add_object = MagicMock()
     mock_get_batch_manager = MagicMock(return_value=mock_batch_manager)
 
+    # 2. Mock Settings (custom_properties=None)
     mock_settings = WeaviateSettings(
         COLLECTION_NAME="TestFunctions",
         EXECUTION_COLLECTION_NAME="TestExecutions",
@@ -63,8 +84,20 @@ def mock_decorator_deps_no_props(monkeypatch):
     )
     mock_get_settings = MagicMock(return_value=mock_settings)
 
+    mock_client = MagicMock()
+    mock_get_client = MagicMock(return_value=mock_client)
+
     monkeypatch.setattr("vectorwave.core.decorator.get_batch_manager", mock_get_batch_manager)
     monkeypatch.setattr("vectorwave.core.decorator.get_weaviate_settings", mock_get_settings)
+    monkeypatch.setattr("vectorwave.monitoring.tracer.get_batch_manager", mock_get_batch_manager)
+    monkeypatch.setattr("vectorwave.monitoring.tracer.get_weaviate_settings", mock_get_settings)
+    monkeypatch.setattr("vectorwave.batch.batch.get_weaviate_client", mock_get_client)
+    monkeypatch.setattr("vectorwave.batch.batch.get_weaviate_settings", mock_get_settings)
+
+    # 5. Clear caches
+    real_get_batch_manager.cache_clear()
+    real_get_cached_client.cache_clear()
+    real_get_settings.cache_clear()
 
     return {
         "get_batch": mock_get_batch_manager,
