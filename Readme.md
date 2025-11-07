@@ -97,7 +97,11 @@ WEAVIATE_HOST=localhost
 WEAVIATE_PORT=8080
 WEAVIATE_GRPC_PORT=50051
 
-# --- Vectorizer Settings (if using OpenAI) ---
+# --- Vectorizer , Generative Module Config ---
+# (default: text2vec-openai) Set to 'none' to disable vectorization.
+VECTORIZER_CONFIG=text2vec-openai
+# (default: generative-openai)
+GENERATIVE_CONFIG=generative-openai
 # An OpenAI API key is required if using modules like text2vec-openai.
 # OPENAI_API_KEY=sk-your-key-here
 
