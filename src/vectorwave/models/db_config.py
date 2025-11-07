@@ -22,6 +22,9 @@ class WeaviateSettings(BaseSettings):
 
     # Configure to read from a .env file (optional)
 
+    VECTORIZER_CONFIG: str = "text2vec-openai"
+    GENERATIVE_CONFIG: str = "generative-openai"
+
     CUSTOM_PROPERTIES_FILE_PATH: str = ".weaviate_properties"
     custom_properties: Optional[Dict[str, Dict[str, Any]]] = None
     global_custom_values: Optional[Dict[str, Any]] = None

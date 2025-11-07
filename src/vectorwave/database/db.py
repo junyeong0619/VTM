@@ -152,24 +152,39 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
     # 5. Combine properties
     all_properties = base_properties + custom_properties
 
+    vectorizer_name = settings.VECTORIZER_CONFIG.lower()
+    vector_config = None
+
+    print(f"Configuring vectorizer: {vectorizer_name}")
+
+    if vectorizer_name == "text2vec-openai":
+        vector_config = wvc.Configure.Vectorizer.text2vec_openai(
+            vectorize_collection_name=settings.IS_VECTORIZE_COLLECTION_NAME,
+        )
+    elif vectorizer_name == "none":
+        vector_config = wvc.Configure.Vectorizer.none()
+    else:
+        raise SchemaCreationError(
+            f"Unsupported VECTORIZER_CONFIG: '{settings.VECTORIZER_CONFIG}'. "
+            f"Supported values: 'text2vec-openai', 'none'."
+        )
+
+    generative_config = None
+    if settings.GENERATIVE_CONFIG.lower() == "generative-openai":
+        generative_config = wvc.Configure.Generative.openai()
+
+
     try:
         vectorwave_collection = client.collections.create(
             name=collection_name,
-
-            # 6. Use combined properties
             properties=all_properties,
 
             # 7. Vectorizer Configuration
-            vector_config=wvc.Configure.Vectorizer.text2vec_openai(
-                # OpenAI API key must be set via environment variable (OPENAI_API_KEY).
-                vectorize_collection_name=settings.IS_VECTORIZE_COLLECTION_NAME, # Include collection name in vectorization
-            ),
+            vector_config=vector_config,
 
             # 8. Generative Configuration (for RAG, etc.)
-            generative_config=wvc.Configure.Generative.openai()
+            generative_config=generative_config
         )
-
-        print(f"Collection '{collection_name}' created successfully.")
         return vectorwave_collection
 
     except Exception as e:
@@ -192,7 +207,7 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
     properties = [
         wvc.Property(
             name="function_uuid",
-            data_type=wvc.DataType.UUID, # VectorWaveFunctions 객체와 연결
+            data_type=wvc.DataType.UUID,
             description="The UUID of the executed function definition"
         ),
         wvc.Property(
