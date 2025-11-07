@@ -378,3 +378,70 @@ def test_create_execution_schema_existing(test_settings):
     mock_collections.create.assert_not_called() # create should not be called
     mock_collections.get.assert_called_once_with(test_settings.EXECUTION_COLLECTION_NAME) # get should be called
     assert collection == mock_existing_collection
+
+
+
+@patch('vectorwave.database.db.wvc.Configure.Generative.openai')
+@patch('vectorwave.database.db.wvc.Configure.Vectorizer.text2vec_openai')
+def test_create_schema_vectorizer_openai(mock_text2vec_openai, mock_gen_openai, test_settings):
+    """
+    Case 12: Test if text2vec_openai is called when VECTORIZER_CONFIG='text2vec-openai'
+    """
+    # 1. Arrange
+    mock_client = MagicMock(spec=weaviate.WeaviateClient)
+    mock_collections = MagicMock()
+    mock_collections.exists.return_value = False
+    mock_client.collections = mock_collections
+
+    test_settings.VECTORIZER_CONFIG = "text2vec-openai"
+    test_settings.GENERATIVE_CONFIG = "generative-openai"
+
+    # 2. Act
+    create_vectorwave_schema(mock_client, test_settings)
+
+    # 3. Assert
+    mock_collections.create.assert_called_once()
+    mock_text2vec_openai.assert_called_once()
+    mock_gen_openai.assert_called_once()
+
+
+@patch('vectorwave.database.db.wvc.Configure.Vectorizer.none')
+def test_create_schema_vectorizer_none(mock_none, test_settings):
+    """
+    Case 13: Test if none is called when VECTORIZER_CONFIG='none'
+    """
+    # 1. Arrange
+    mock_client = MagicMock(spec=weaviate.WeaviateClient)
+    mock_collections = MagicMock()
+    mock_collections.exists.return_value = False
+    mock_client.collections = mock_collections
+
+    test_settings.VECTORIZER_CONFIG = "none"
+
+    # 2. Act
+    create_vectorwave_schema(mock_client, test_settings)
+
+    # 3. Assert
+    mock_collections.create.assert_called_once()
+    mock_none.assert_called_once()
+
+
+def test_create_schema_vectorizer_invalid(test_settings):
+    """
+    Case 14: Test if SchemaCreationError is raised for an unsupported VECTORIZER_CONFIG value
+    """
+    # 1. Arrange
+    mock_client = MagicMock(spec=weaviate.WeaviateClient)
+    mock_collections = MagicMock()
+    mock_collections.exists.return_value = False
+    mock_client.collections = mock_collections
+
+    test_settings.VECTORIZER_CONFIG = "unsupported-module"
+
+    # 2. Act & 3. Assert
+    with pytest.raises(SchemaCreationError) as exc_info:
+        create_vectorwave_schema(mock_client, test_settings)
+
+    assert "Unsupported VECTORIZER_CONFIG" in str(exc_info.value)
+    assert "'text2vec-openai', 'none'" in str(exc_info.value)
+    assert "text2vec-huggingface" not in str(exc_info.value)
