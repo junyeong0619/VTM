@@ -206,6 +206,21 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
 
     properties = [
         wvc.Property(
+            name="trace_id",
+            data_type=wvc.DataType.TEXT,
+            description="The unique ID for the entire trace/workflow"
+        ),
+        wvc.Property(
+            name="span_id",
+            data_type=wvc.DataType.TEXT,
+            description="The unique ID for this specific span/function execution"
+        ),
+        wvc.Property(
+            name="function_name",
+            data_type=wvc.DataType.TEXT,
+            description="Name of the executed function (span name)"
+        ),
+        wvc.Property(
             name="function_uuid",
             data_type=wvc.DataType.UUID,
             description="The UUID of the executed function definition"
