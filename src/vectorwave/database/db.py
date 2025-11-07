@@ -158,11 +158,14 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
     print(f"Configuring vectorizer: {vectorizer_name}")
 
     if vectorizer_name == "text2vec-openai":
-        vector_config = wvc.Configure.Vectorizer.text2vec_openai(
-            vectorize_collection_name=settings.IS_VECTORIZE_COLLECTION_NAME,
-        )
+        vector_config = {
+            "vectorizer": "text2vec-openai",
+            "text2vec-openai": {
+                "vectorizeClassName": settings.IS_VECTORIZE_COLLECTION_NAME,
+            }
+        }
     elif vectorizer_name == "none":
-        vector_config = wvc.Configure.Vectorizer.none()
+        vector_config = {"vectorizer": "none"}
     else:
         raise SchemaCreationError(
             f"Unsupported VECTORIZER_CONFIG: '{settings.VECTORIZER_CONFIG}'. "
@@ -171,7 +174,7 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
 
     generative_config = None
     if settings.GENERATIVE_CONFIG.lower() == "generative-openai":
-        generative_config = wvc.Configure.Generative.openai()
+        generative_config = {"generator": "generative-openai"}
 
 
     try:
@@ -275,7 +278,8 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
         execution_collection = client.collections.create(
             name=collection_name,
             properties=properties,
-            vector_config=wvc.Configure.Vectorizer.none()
+            vectorizer_config=wvc.Configure.Vectorizer.none(),
+            vector_index_config=wvc.Configure.VectorIndex.none()
         )
         print(f"Collection '{collection_name}' created successfully.")
         return execution_collection
