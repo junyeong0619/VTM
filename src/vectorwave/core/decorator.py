@@ -1,13 +1,13 @@
+# vtm/src/vectorwave/core/decorator.py
+
 import inspect
-import time
-import traceback
-from datetime import datetime, timezone
 from functools import wraps
+
 from weaviate.util import generate_uuid5
 
 from ..batch.batch import get_batch_manager
 from ..models.db_config import get_weaviate_settings
-from ..exception.exceptions import SchemaCreationError
+from ..monitoring.tracer import trace_root, trace_span
 
 
 def vectorize(search_description: str,
@@ -22,7 +22,6 @@ def vectorize(search_description: str,
 
     def decorator(func):
 
-        # --- 1. Static Data Collection (Runs once on script load) ---
         func_uuid = None
         valid_execution_tags = {}
         try:
@@ -32,7 +31,6 @@ def vectorize(search_description: str,
             func_identifier = f"{module_name}.{function_name}"
             func_uuid = generate_uuid5(func_identifier)
 
-            # Matches the base properties in db.py's create_vectorwave_schema
             static_properties = {
                 "function_name": function_name,
                 "module_name": module_name,
@@ -52,15 +50,11 @@ def vectorize(search_description: str,
                         f"but no .weaviate_properties file was loaded. These tags will be IGNORED."
                     )
                 else:
-                    # compare keys
                     allowed_keys = set(settings.custom_properties.keys())
-
                     for key, value in execution_tags.items():
                         if key in allowed_keys:
-                            # 1. valid tags are saved
                             valid_execution_tags[key] = value
                         else:
-                            # 2. not allowed tags print errors
                             print(
                                 f"Warning: Function '{function_name}' has undefined execution_tag: '{key}'. "
                                 f"This tag will be IGNORED. Please add it to your .weaviate_properties file."
@@ -75,59 +69,40 @@ def vectorize(search_description: str,
         except Exception as e:
             print(f"Error in @vectorize setup for {func.__name__}: {e}")
 
+
+        # 2a. The *inner* wrapper to be wrapped by @trace_span
+        # This function receives all tags including full_kwargs from @trace_span.
+        @trace_root()
+        @trace_span(attributes_to_capture=['function_uuid', 'team', 'priority', 'run_id'])
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def inner_wrapper(*args, **kwargs):
 
-            # --- 2. Dynamic Data Logging (Runs every time the function is called) ---
-            if not func_uuid:
-                print(f"Warning: Skipping execution log for {func.__name__}: func_uuid not set.")
-                return func(*args, **kwargs)
+            original_kwargs = kwargs.copy()
 
-            start_time = time.perf_counter()
-            timestamp_utc = datetime.now(timezone.utc).isoformat()
-            status = "SUCCESS"
-            error_msg = None
-            result = None
+            keys_to_remove = list(valid_execution_tags.keys())
+            keys_to_remove.append('function_uuid')
 
-            try:
-                result = func(*args, **kwargs)
-            except Exception as e:
-                status = "ERROR"
-                error_msg = traceback.format_exc()
-                print(f"Error during execution of {func.__name__}: {e}")  # print 유지
-                raise e
-            finally:
-                duration_ms = (time.perf_counter() - start_time) * 1000
+            for key in execution_tags.keys():
+                if key not in keys_to_remove:
+                    keys_to_remove.append(key)
 
-                try:
-                    settings = get_weaviate_settings()
-                    global_values = settings.global_custom_values or {}
+            for key in keys_to_remove:
+                original_kwargs.pop(key, None)
 
-                    # Matches the base properties in db.py's create_execution_schema
-                    execution_props = {
-                        "function_uuid": func_uuid,
-                        "timestamp_utc": timestamp_utc,
-                        "duration_ms": duration_ms,
-                        "status": status,
-                        "error_message": error_msg,
-                    }
+            return func(*args, **original_kwargs)
 
-                    # Merge global custom values (e.g., run_id)
-                    execution_props.update(global_values)
 
-                    if valid_execution_tags:
-                        execution_props.update(valid_execution_tags)
+        @wraps(func)
+        def outer_wrapper(*args, **kwargs):
 
-                    batch = get_batch_manager()
-                    batch.add_object(
-                        collection=settings.EXECUTION_COLLECTION_NAME,
-                        properties=execution_props
-                    )
-                except Exception as e:
-                    print(f"Error: Failed to log execution for {func.__name__}: {e}")
+            full_kwargs = kwargs.copy()
+            full_kwargs.update(valid_execution_tags)
+            full_kwargs['function_uuid'] = func_uuid
 
-            return result
+            # 2. Call the *inner* wrapper with the full_kwargs
+            #    This call passes through the @trace_root -> @trace_span decorators.
+            return inner_wrapper(*args, **full_kwargs)
 
-        return wrapper
+        return outer_wrapper
 
     return decorator
