@@ -381,11 +381,10 @@ def test_create_execution_schema_existing(test_settings):
 
 
 
-@patch('vectorwave.database.db.wvc.Configure.Generative.openai')
-@patch('vectorwave.database.db.wvc.Configure.Vectorizer.text2vec_openai')
-def test_create_schema_vectorizer_openai(mock_text2vec_openai, mock_gen_openai, test_settings):
+
+def test_create_schema_vectorizer_openai(test_settings):
     """
-    Case 12: Test if text2vec_openai is called when VECTORIZER_CONFIG='text2vec-openai'
+    Case 12: Test if the correct dict config is passed when VECTORIZER_CONFIG='text2vec-openai'
     """
     # 1. Arrange
     mock_client = MagicMock(spec=weaviate.WeaviateClient)
@@ -396,19 +395,31 @@ def test_create_schema_vectorizer_openai(mock_text2vec_openai, mock_gen_openai, 
     test_settings.VECTORIZER_CONFIG = "text2vec-openai"
     test_settings.GENERATIVE_CONFIG = "generative-openai"
 
+    expected_vector_config = {
+        "vectorizer": "text2vec-openai",
+        "text2vec-openai": {
+            "vectorizeClassName": test_settings.IS_VECTORIZE_COLLECTION_NAME,
+        }
+    }
+    expected_generative_config = {"generator": "generative-openai"}
+
     # 2. Act
     create_vectorwave_schema(mock_client, test_settings)
 
     # 3. Assert
     mock_collections.create.assert_called_once()
-    mock_text2vec_openai.assert_called_once()
-    mock_gen_openai.assert_called_once()
+
+    call_args = mock_collections.create.call_args
 
 
-@patch('vectorwave.database.db.wvc.Configure.Vectorizer.none')
-def test_create_schema_vectorizer_none(mock_none, test_settings):
+    assert call_args.kwargs.get('vector_config') == expected_vector_config
+    assert call_args.kwargs.get('generative_config') == expected_generative_config
+
+
+
+def test_create_schema_vectorizer_none(test_settings):
     """
-    Case 13: Test if none is called when VECTORIZER_CONFIG='none'
+    Case 13: Test if the correct dict config is passed when VECTORIZER_CONFIG='none'
     """
     # 1. Arrange
     mock_client = MagicMock(spec=weaviate.WeaviateClient)
@@ -418,12 +429,18 @@ def test_create_schema_vectorizer_none(mock_none, test_settings):
 
     test_settings.VECTORIZER_CONFIG = "none"
 
+    expected_vector_config = {"vectorizer": "none"}
+
     # 2. Act
     create_vectorwave_schema(mock_client, test_settings)
 
     # 3. Assert
     mock_collections.create.assert_called_once()
-    mock_none.assert_called_once()
+
+    call_args = mock_collections.create.call_args
+    # mock_none.assert_called_once() -> 삭제
+
+    assert call_args.kwargs.get('vector_config') == expected_vector_config
 
 
 def test_create_schema_vectorizer_invalid(test_settings):
