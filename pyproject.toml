@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vectorwave"
+version = "0.1.0"
+authors = [
+    { name = "junyeonggim", email = "junyeonggim5@gmail.com" },
+]
+description = "VectorWave: Seamless Auto-Vectorization Framework"
+readme = "Readme.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "weaviate-client>=4.0.0",
+    "pydantic-settings>=2.0.0"
+]
+# ⬆️⬆️⬆️ ⬆️⬆️⬆️
+
+[tool.setuptools.packages.find]
+where = ["src"]
