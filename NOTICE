@@ -1,0 +1,31 @@
+============================================================
+VectorWave - NOTICE
+============================================================
+
+VectorWave is licensed under the MIT License and includes code
+from other open source projects. The following notices are required
+by those third-party components.
+
+VectorWave Copyright (c) 2025 Jun Yeong Kim
+Licensed under the MIT License.
+
+------------------------------------------------------------
+THIRD-PARTY COMPONENT LICENSES AND NOTICES
+------------------------------------------------------------
+
+VectorWave uses the following open source software components. These components are provided under their respective license conditions, and all required notices are included below:
+
+1. WEAVIATE CLIENT
+------------------------------------------------------------
+Weaviate Client, Copyright (c) 2023 SeMi Technologies
+Licensed under the Apache License, Version 2.0.
+
+VectorWave uses the Weaviate Python Client for connection and interaction with the Weaviate database. The Apache 2.0 license requires inclusion of this notice.
+
+2. PYDANTIC
+------------------------------------------------------------
+Pydantic, Copyright (c) 2017-present Pydantic Contributors
+Licensed under the MIT License.
+
+VectorWave uses Pydantic for configuration management and data model validation.
+
