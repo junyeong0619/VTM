@@ -4,23 +4,32 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vectorwave"
-version = "0.1.0"
+version = "0.1.2"
 authors = [
     { name = "junyeonggim", email = "junyeonggim5@gmail.com" },
 ]
 description = "VectorWave: Seamless Auto-Vectorization Framework"
 readme = "Readme.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",  # ← 추가
+    "Programming Language :: Python :: 3.11",  # ← 추가
+    "Programming Language :: Python :: 3.12",  # ← 추가
+    "Programming Language :: Python :: 3.13",  # ← 추가
     "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
 ]
 
 dependencies = [
     "weaviate-client>=4.0.0",
     "pydantic-settings>=2.0.0"
 ]
-# ⬆️⬆️⬆️ ⬆️⬆️⬆️
+
+[project.urls]
+Repository = "https://github.com/republicofgamja/vtm"
 
 [tool.setuptools.packages.find]
 where = ["src"]
