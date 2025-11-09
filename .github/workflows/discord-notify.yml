@@ -1,0 +1,25 @@
+name: Discord Notification
+
+on:
+  workflow_run:
+    workflows: ["VectorWave CI/CD", "Publish to PyPI"]
+    types:
+      - completed
+
+  pull_request:
+    types:
+      - opened
+      - closed
+
+  issues:
+    types:
+      - opened
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Discord notification
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
