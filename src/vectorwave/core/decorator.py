@@ -53,10 +53,10 @@ def vectorize(search_description: str,
             if vectorizer:
 
                 try:
-                    print(f"[VectorWave] Vectorizing '{function_name}' using Python vectorizer...")
+                    logger.info(f"Vectorizing '{function_name}' using Python vectorizer...")
                     vector_to_add = vectorizer.embed(search_description)
                 except Exception as e:
-                    print(f"Warning: Failed to vectorize '{function_name}' with Python client: {e}")
+                    logger.warning(f"Failed to vectorize '{function_name}' with Python client: {e}")
 
             if execution_tags:
                 if not settings.custom_properties:
