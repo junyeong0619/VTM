@@ -31,13 +31,16 @@ class WeaviateSettings(BaseSettings):
 
     WEAVIATE_GENERATIVE_MODULE: str = "generative-openai"
 
-    # [신규] Python 클라이언트용 설정
     OPENAI_API_KEY: Optional[str] = None
     HF_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     CUSTOM_PROPERTIES_FILE_PATH: str = ".weaviate_properties"
+    FAILURE_MAPPING_FILE_PATH: str = ".vectorwave_errors.json"
+
     custom_properties: Optional[Dict[str, Dict[str, Any]]] = None
     global_custom_values: Optional[Dict[str, Any]] = None
+    failure_mapping: Optional[Dict[str, str]] = None
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8",extra='ignore')
 
 
@@ -88,5 +91,21 @@ def get_weaviate_settings() -> WeaviateSettings:
             if value:
                 settings.global_custom_values[prop_name] = value
                 logger.debug("Loaded global value for '%s' from env var '%s'", prop_name, env_var_name)
+
+    error_file_path = settings.FAILURE_MAPPING_FILE_PATH
+
+    if error_file_path and os.path.exists(error_file_path):
+        logger.info(f"Loading failure mapping from '{error_file_path}'...")
+        try:
+            with open(error_file_path, 'r', encoding='utf-8') as f:
+                loaded_data = json.load(f)
+                if isinstance(loaded_data, dict):
+                    settings.failure_mapping = loaded_data
+                else:
+                    logger.warning(f"Content in '{error_file_path}' is not a valid dictionary. Skipping failure mapping.")
+        except Exception as e:
+            logger.warning(f"Could not read or parse '{error_file_path}': {e}")
+    elif error_file_path:
+        logger.info(f"Note: Failure mapping file not found at '{error_file_path}'. Skipping.")
 
     return settings
