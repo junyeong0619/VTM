@@ -323,10 +323,6 @@ def initialize_database():
             create_execution_schema(client, settings)
             return client
     except Exception as e:
-<<<<<<< HEAD
         logger.error("Failed to initialize VectorWave database: %s", e)
         return None
-=======
-        print(f"Failed to initialize VectorWave database: {e}")
-        return None
->>>>>>> eaf0ebe (refactor(schema): Update Schema Creation Logic for New Vectorization Strategy)
+
