@@ -2,6 +2,7 @@ import weaviate
 import atexit
 import logging
 from functools import lru_cache
+from typing import Optional, List
 from ..models.db_config import get_weaviate_settings, WeaviateSettings
 from ..database.db import get_weaviate_client
 from ..exception.exceptions import WeaviateConnectionError
@@ -42,7 +43,7 @@ class WeaviateBatchManager:
             # Prevents VectorWave from stopping the main app upon DB connection failure
             logger.error("Failed to initialize WeaviateBatchManager: %s", e)
 
-    def add_object(self, collection: str, properties: dict, uuid: str = None):
+    def add_object(self, collection: str, properties: dict, uuid: str = None, vector: Optional[List[float]] = None):
         """
         Adds an object to the Weaviate batch queue.
         """
@@ -53,7 +54,8 @@ class WeaviateBatchManager:
         try:
             self.client.collections.get(collection).data.insert(
                 properties=properties,
-                uuid=uuid
+                uuid=uuid,
+                vector=vector
             )
 
         except Exception as e:
