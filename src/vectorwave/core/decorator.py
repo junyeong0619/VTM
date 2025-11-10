@@ -9,6 +9,7 @@ from weaviate.util import generate_uuid5
 from ..batch.batch import get_batch_manager
 from ..models.db_config import get_weaviate_settings
 from ..monitoring.tracer import trace_root, trace_span
+from ..vectorizer.factory import get_vectorizer
 
 # Create module-level logger
 logger = logging.getLogger(__name__)
@@ -46,6 +47,17 @@ def vectorize(search_description: str,
             batch = get_batch_manager()
             settings = get_weaviate_settings()
 
+            vectorizer = get_vectorizer()
+            vector_to_add = None
+
+            if vectorizer:
+
+                try:
+                    print(f"[VectorWave] Vectorizing '{function_name}' using Python vectorizer...")
+                    vector_to_add = vectorizer.embed(search_description)
+                except Exception as e:
+                    print(f"Warning: Failed to vectorize '{function_name}' with Python client: {e}")
+
             if execution_tags:
                 if not settings.custom_properties:
                     logger.warning(
@@ -68,11 +80,17 @@ def vectorize(search_description: str,
             batch.add_object(
                 collection=settings.COLLECTION_NAME,
                 properties=static_properties,
-                uuid=func_uuid
+                uuid=func_uuid,
+                vector=vector_to_add
             )
 
         except Exception as e:
+
             logger.error("Error in @vectorize setup for '%s': %s", func.__name__, e)
+            @wraps(func)
+            def original_func_wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return original_func_wrapper
 
 
         # 2a. The *inner* wrapper to be wrapped by @trace_span
