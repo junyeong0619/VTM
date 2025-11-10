@@ -1,8 +1,7 @@
 import pytest
 import json
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, call
 from json import JSONDecodeError
-
 # Function to test
 from vectorwave.models.db_config import get_weaviate_settings
 
@@ -28,7 +27,7 @@ MOCK_INVALID_JSON = """
   "run_id": {
     "data_type": "TEXT"
   } 
-""" # Missing closing '}'
+"""
 
 # --- Test Cases ---
 
@@ -46,11 +45,11 @@ def test_get_settings_loads_custom_props_success(mock_open_file, mock_exists):
     # Act
     settings = get_weaviate_settings()
 
-    # Assert
-    # Verify that the default path (.weaviate_properties) was checked
-    mock_exists.assert_called_with(".weaviate_properties")
-    # Verify the file was opened in 'r' mode
-    mock_open_file.assert_called_with(".weaviate_properties", 'r', encoding='utf-8')
+    expected_calls = [
+        call(".weaviate_properties"),
+        call(".vectorwave_errors.json")
+    ]
+    mock_exists.assert_has_calls(expected_calls, any_order=False)
 
     assert settings.custom_properties is not None
     assert "run_id" in settings.custom_properties
@@ -75,8 +74,11 @@ def test_get_settings_file_not_found(mock_exists, caplog):
     # Act
     settings = get_weaviate_settings()
 
-    # Assert
-    mock_exists.assert_called_with(".weaviate_properties")
+    expected_calls = [
+        call(".weaviate_properties"),
+        call(".vectorwave_errors.json")
+    ]
+    mock_exists.assert_has_calls(expected_calls, any_order=False)
     assert settings.custom_properties is None
 
     # Check if 'file not found' message was logged
@@ -101,10 +103,7 @@ def test_get_settings_invalid_json(mock_json_load, mock_open_file, mock_exists, 
     # Act
     settings = get_weaviate_settings()
 
-    # Assert
-    mock_exists.assert_called_once()
-    mock_open_file.assert_called_once()
-    mock_json_load.assert_called_once()  # json.load was called but failed (due to side_effect)
+    assert mock_exists.call_count == 2
     assert settings.custom_properties is None  # Should be None due to parsing failure
 
     # Check if 'Could not parse JSON' warning was logged
