@@ -8,6 +8,7 @@ from weaviate.collections.classes.filters import _Filters
 from ..models.db_config import get_weaviate_settings, WeaviateSettings
 from .db import get_cached_client
 from ..exception.exceptions import WeaviateConnectionError
+from ..vectorizer.factory import get_vectorizer
 
 import uuid
 from datetime import datetime
@@ -38,19 +39,37 @@ def search_functions(query: str, limit: int = 5, filters: Optional[Dict[str, Any
         collection = client.collections.get(settings.COLLECTION_NAME)
         weaviate_filter = _build_weaviate_filters(filters)
 
-        response = collection.query.near_text(
-            query=query,
-            limit=limit,
-            filters=weaviate_filter,
-            return_metadata=wvc.query.MetadataQuery(distance=True)
-        )
+        vectorizer = get_vectorizer()
 
-        #todo expand custom range needed
+        if vectorizer:
+            print("[VectorWave] Searching with Python client (near_vector)...")
+            try:
+                query_vector = vectorizer.embed(query)
+            except Exception as e:
+                print(f"Error vectorizing query with Python client: {e}")
+                raise WeaviateConnectionError(f"Query vectorization failed: {e}")
+
+            response = collection.query.near_vector(
+                near_vector=query_vector,
+                limit=limit,
+                filters=weaviate_filter,
+                return_metadata=wvc.query.MetadataQuery(distance=True)
+            )
+
+        else:
+            print("[VectorWave] Searching with Weaviate module (near_text)...")
+            response = collection.query.near_text(
+                query=query,
+                limit=limit,
+                filters=weaviate_filter,
+                return_metadata=wvc.query.MetadataQuery(distance=True)
+            )
+
         results = [
             {
                 "properties": obj.properties,
-                "metadata": obj.metadata,  # This contains the distance
-                "uuid": obj.uuid          # Add uuid separately here
+                "metadata": obj.metadata,
+                "uuid": obj.uuid
             }
             for obj in response.objects
         ]
