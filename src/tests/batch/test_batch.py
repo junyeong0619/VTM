@@ -93,5 +93,6 @@ def test_add_object_calls_client_batch(mock_deps):
 
     mock_deps["client"].collections.get.return_value.data.insert.assert_called_once_with(
         properties=props,
-        uuid="test-uuid"
+        uuid="test-uuid",
+        vector=None
 )

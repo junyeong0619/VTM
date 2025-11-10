@@ -392,16 +392,12 @@ def test_create_schema_vectorizer_openai(test_settings):
     mock_collections.exists.return_value = False
     mock_client.collections = mock_collections
 
-    test_settings.VECTORIZER_CONFIG = "text2vec-openai"
-    test_settings.GENERATIVE_CONFIG = "generative-openai"
+    test_settings.VECTORIZER = "weaviate_module"
+    test_settings.WEAVIATE_VECTORIZER_MODULE = "text2vec-openai"
 
-    expected_vector_config = {
-        "vectorizer": "text2vec-openai",
-        "text2vec-openai": {
-            "vectorizeClassName": test_settings.IS_VECTORIZE_COLLECTION_NAME,
-        }
-    }
-    expected_generative_config = {"generator": "generative-openai"}
+    # [수정] test_settings.GENERATIVE_CONFIG = "generative-openai" ->
+    test_settings.WEAVIATE_GENERATIVE_MODULE = "generative-openai"
+
 
     # 2. Act
     create_vectorwave_schema(mock_client, test_settings)
@@ -411,9 +407,16 @@ def test_create_schema_vectorizer_openai(test_settings):
 
     call_args = mock_collections.create.call_args
 
+    vector_config_arg = call_args.kwargs.get('vector_config')
+    # assert isinstance(vector_config_arg, wvc.Configure.Vectorizer)
+    # assert vector_config_arg.name == "text2vec-openai"
 
-    assert call_args.kwargs.get('vector_config') == expected_vector_config
-    assert call_args.kwargs.get('generative_config') == expected_generative_config
+    assert vector_config_arg.vectorizer == "text2vec-openai"
+
+    # 3b. Generative Config 검증
+    generative_config_arg = call_args.kwargs.get('generative_config')
+    assert generative_config_arg.generative == "generative-openai"
+
 
 
 
@@ -427,9 +430,8 @@ def test_create_schema_vectorizer_none(test_settings):
     mock_collections.exists.return_value = False
     mock_client.collections = mock_collections
 
-    test_settings.VECTORIZER_CONFIG = "none"
-
-    expected_vector_config = {"vectorizer": "none"}
+    test_settings.VECTORIZER = "none"
+    test_settings.WEAVIATE_VECTORIZER_MODULE = ""
 
     # 2. Act
     create_vectorwave_schema(mock_client, test_settings)
@@ -440,7 +442,10 @@ def test_create_schema_vectorizer_none(test_settings):
     call_args = mock_collections.create.call_args
     # mock_none.assert_called_once() -> 삭제
 
-    assert call_args.kwargs.get('vector_config') == expected_vector_config
+    vector_config_arg = call_args.kwargs.get('vector_config')
+
+
+    assert vector_config_arg.vectorizer == "none"
 
 
 def test_create_schema_vectorizer_invalid(test_settings):
@@ -453,12 +458,11 @@ def test_create_schema_vectorizer_invalid(test_settings):
     mock_collections.exists.return_value = False
     mock_client.collections = mock_collections
 
-    test_settings.VECTORIZER_CONFIG = "unsupported-module"
+    test_settings.VECTORIZER = "unsupported-module"
 
     # 2. Act & 3. Assert
     with pytest.raises(SchemaCreationError) as exc_info:
         create_vectorwave_schema(mock_client, test_settings)
 
-    assert "Unsupported VECTORIZER_CONFIG" in str(exc_info.value)
-    assert "'text2vec-openai', 'none'" in str(exc_info.value)
-    assert "text2vec-huggingface" not in str(exc_info.value)
+    assert "Invalid VECTORIZER setting" in str(exc_info.value)
+    assert "unsupported-module" in str(exc_info.value)
