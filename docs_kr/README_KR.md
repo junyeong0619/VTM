@@ -191,6 +191,7 @@ OPENAI_API_KEY=sk-...
 
 # --- [고급] 커스텀 속성 설정 ---
 CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
+FAILURE_MAPPING_FILE_PATH=.vectorwave_errors.json
 RUN_ID=test-run-001
 ```
 
@@ -242,6 +243,62 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
 RUN_ID=test-run-001
 ```
+-----
+### 🚀 고급 실패 추적 (Error Code)
+
+단순히 `status: "ERROR"`로 기록하는 것을 넘어, `VectorWaveExecutions` 로그에 `error_code` 속성을 추가하여 실패 원인을 세분화합니다.
+
+`@vectorize` 또는 `@trace_span`으로 감싸인 함수가 실패할 때, `error_code`는 다음 3가지 우선순위에 따라 자동으로 결정됩니다.
+
+1.  **커스텀 예외 속성 (우선순위 1):**
+    가장 구체적인 방법입니다. 발생한 예외 객체 `e`가 `e.error_code` 속성을 가지고 있다면, 해당 값을 `error_code`로 사용합니다.
+
+    ```python
+    class PaymentError(Exception):
+        def __init__(self, message, error_code):
+            super().__init__(message)
+            self.error_code = error_code # ⬅️ 이 속성을 감지합니다.
+
+    @vectorize(...)
+    def process_payment(amount):
+        if amount < 0:
+            raise PaymentError("Amount < 0", error_code="PAYMENT_NEGATIVE_AMOUNT")
+    
+    # 실행 시 DB 로그: { "status": "ERROR", "error_code": "PAYMENT_NEGATIVE_AMOUNT" }
+    ```
+
+2.  **전역 매핑 파일 (우선순위 2):**
+    `ValueError` 등 일반적인 예외를 중앙에서 관리합니다. `.env` 파일에 `FAILURE_MAPPING_FILE_PATH` (기본값: `.vectorwave_errors.json`)로 지정된 JSON 파일에서 예외 클래스 이름을 키로 찾아 매핑합니다.
+
+    **`.vectorwave_errors.json` 예시:**
+    ```json
+    {
+      "ValueError": "INVALID_INPUT",
+      "KeyError": "CONFIG_MISSING",
+      "TypeError": "INVALID_INPUT"
+    }
+    ```
+
+    ```python
+    @vectorize(...)
+    def get_config(key):
+        return os.environ[key] # ⬅️ KeyError 발생
+    
+    # 실행 시 DB 로그: { "status": "ERROR", "error_code": "CONFIG_MISSING" }
+    ```
+
+3.  **기본값 (우선순위 3):**
+    위 1, 2번에 해당하지 않는 모든 예외는 예외 클래스의 이름(예: `"ZeroDivisionError"`)이 `error_code`로 자동 저장됩니다.
+
+**[활용] 실패 로그 검색:**
+이제 `search_executions`에서 `error_code`를 필터링하여 특정 유형의 실패만 집계할 수 있습니다.
+
+```python
+# "INVALID_INPUT"으로 분류된 모든 실패 로그 검색
+invalid_logs = search_executions(
+  filters={"error_code": "INVALID_INPUT"},
+  limit=10
+)
 
 -----
 
@@ -276,7 +333,7 @@ VectorWave는 정적 데이터(함수 정의)와 동적 데이터(실행 로그)
     "description": "실행 우선순위"
   }
 }
-```
+
 
 * 위와 같이 정의하면 `VectorWaveFunctions`와 `VectorWaveExecutions` 컬렉션 모두에 `run_id`, `experiment_id`, `team`, `priority` 속성이 추가됩니다.
 

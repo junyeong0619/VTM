@@ -1,29 +1,30 @@
 
+
 # VectorWave: Seamless Auto-Vectorization Framework
 
-[](https://www.google.com/search?q=LICENSE)
+[](https://opensource.org/licenses/MIT)
 
 ## 🌟 Overview
 
-**VectorWave** is an innovative framework that uses a **decorator** to automatically save and manage the output of Python functions/methods in a **Vector Database (Vector DB)**. Developers can convert function outputs into intelligent vector data with a single line of code (`@vectorize`), without worrying about the complex processes of data collection, embedding generation, or storage in a Vector DB.
+**VectorWave** is an innovative framework that uses **decorators** to automatically save and manage the output of Python functions/methods in a **Vector Database (Vector DB)**. Developers can convert function outputs into intelligent vector data with just a single line of code (`@vectorize`), without worrying about the complex processes of data collection, embedding generation, and Vector DB storage.
 
----
+-----
 
 ## ✨ Features
 
 * **`@vectorize` Decorator:**
-  1.  **Static Data Collection:** Saves the function's source code, docstring, and metadata to the `VectorWaveFunctions` collection once when the script is loaded.
-  2.  **Dynamic Data Logging:** Records the execution time, success/failure status, error logs, and 'dynamic tags' to the `VectorWaveExecutions` collection every time the function is called.
-* **Distributed Tracing:** By combining the `@vectorize` and `@trace_span` decorators, you can analyze the execution of complex multi-step workflows, grouped under a single **`trace_id`**.
-* **Search Interface:** Provides `search_functions` (for vector search) and `search_executions` (for log filtering) to facilitate the construction of RAG and monitoring systems.
+  1.  **Static Data Collection:** Upon script load, the function's source code, docstring, and metadata are saved once to the `VectorWaveFunctions` collection.
+  2.  **Dynamic Data Logging:** Each time the function is called, its execution time, success/failure status, error logs, and "dynamic tags" are recorded in the `VectorWaveExecutions` collection.
+* **Distributed Tracing:** Combines `@vectorize` and `@trace_span` decorators to bundle the execution of complex, multi-step workflows under a single **`trace_id`** for analysis.
+* **Search Interface:** Provides `search_functions` and `search_executions` to query the stored vector data (function definitions) and logs (execution history), facilitating the construction of RAG and monitoring systems.
 
----
+-----
 
 ## 🚀 Usage
 
-VectorWave consists of 'storing' via decorators and 'searching' via functions, and now includes **execution flow tracing**.
+VectorWave consists of "storage" via decorators and "retrieval" via functions, and now includes **execution flow tracing**.
 
-### 1. (Required) Initialize the Database and Configuration
+### 1\. (Required) Database Initialization and Setup
 
 ```python
 import time
@@ -33,50 +34,50 @@ from vectorwave import (
     search_functions, 
     search_executions
 )
-# [ADDITION] Import trace_span separately for distributed tracing.
+# [New] Import trace_span separately for distributed tracing.
 from vectorwave.monitoring.tracer import trace_span 
 
-# This only needs to be called once when the script starts.
+# Needs to be called only once at script startup.
 try:
     client = initialize_database()
-    print("VectorWave DB initialized successfully.")
+    print("VectorWave DB initialization successful.")
 except Exception as e:
     print(f"DB initialization failed: {e}")
     exit()
-````
+```
 
-### 2\. [Store] Use `@vectorize` with Distributed Tracing
+### 2\. [Storage] Using `@vectorize` and Distributed Tracing
 
-The `@vectorize` acts as the **Root** for tracing, and `@trace_span` is used on internal functions to group the execution flow under a single `trace_id`.
+`@vectorize` acts as the **Root** of the trace, and applying `@trace_span` to internal functions bundles the workflow execution under a **single `trace_id`**.
 
 ```python
 # --- Child Span Function: Captures arguments ---
 @trace_span(attributes_to_capture=['user_id', 'amount'])
 def step_1_validate_payment(user_id: str, amount: int):
-    """(Span) Payment validation. Records user_id and amount in the log."""
+    """(Span) Validates payment. Logs user_id and amount."""
     print(f"  [SPAN 1] Validating payment for {user_id}...")
     time.sleep(0.1)
     return True
 
 @trace_span(attributes_to_capture=['user_id', 'receipt_id'])
 def step_2_send_receipt(user_id: str, receipt_id: str):
-    """(Span) Sends the receipt."""
+    """(Span) Sends receipt."""
     print(f"  [SPAN 2] Sending receipt {receipt_id}...")
     time.sleep(0.2)
 
 
-# --- Root Function (@trace_root role) ---
+# --- Root Function (acts as @trace_root) ---
 @vectorize(
-    search_description="Charges a user in the payment system.",
-    sequence_narrative="Returns a receipt ID upon successful payment.",
-    team="billing",  # <-- Custom Tag (recorded in all execution logs)
-    priority=1       # <-- Custom Tag (execution priority)
+    search_description="Processes a user payment and returns a receipt.",
+    sequence_narrative="After payment is complete, a receipt is sent via email.",
+    team="billing",  # ⬅️ Custom tag (logged on all executions)
+    priority=1       # ⬅️ Custom tag (execution importance)
 )
 def process_payment(user_id: str, amount: int):
     """(Root Span) Executes the user payment workflow."""
     print(f"  [ROOT EXEC] process_payment: Starting workflow for {user_id}...")
     
-    # When calling child functions, the same trace_id is automatically inherited via ContextVar.
+    # When child functions are called, the same trace_id is automatically inherited via ContextVar.
     step_1_validate_payment(user_id=user_id, amount=amount) 
     
     receipt_id = f"receipt_{user_id}_{amount}"
@@ -85,20 +86,20 @@ def process_payment(user_id: str, amount: int):
     print(f"  [ROOT DONE] process_payment")
     return {"status": "success", "receipt_id": receipt_id}
 
-# --- Execute the Function ---
+# --- Function Execution ---
 print("Now calling 'process_payment'...")
-# This single call records 3 execution logs (spans) in the DB,
-# all grouped under one 'trace_id'.
+# This single call will record a total of 3 execution logs (spans) in the DB,
+# and all three logs will be tied to a single 'trace_id'.
 process_payment("user_789", 5000)
 ```
 
-### 3\. [Search ①] Function Definition Search (for RAG)
+### 3\. [Retrieval ①] Search Function Definitions (for RAG)
 
 ```python
-# Search for functions related to 'payment' using natural language (vector search).
-print("\n--- Searching for 'payment' functions ---")
+# Search for functions related to 'payment' using natural language (vector).
+print("\n--- Searching for 'payment' related functions ---")
 payment_funcs = search_functions(
-    query="user payment processing",
+    query="User payment processing feature",
     limit=3
 )
 for func in payment_funcs:
@@ -107,9 +108,9 @@ for func in payment_funcs:
     print(f"  - Similarity (Distance): {func['metadata'].distance:.4f}")
 ```
 
-### 4\. [Search ②] Execution Log Search (Monitoring and Tracing)
+### 4\. [Retrieval ②] Search Execution Logs (for Monitoring & Tracing)
 
-The `search_executions` function can now search for all related execution logs (spans) based on the `trace_id`.
+`search_executions` can now retrieve all related execution logs (spans) based on a `trace_id`.
 
 ```python
 # 1. Find the Trace ID of a specific workflow (process_payment).
@@ -121,24 +122,25 @@ latest_payment_span = search_executions(
 )
 trace_id = latest_payment_span[0]["trace_id"] 
 
-# 2. Search all spans belonging to that Trace ID, sorted chronologically.
+# 2. Retrieve all spans belonging to that Trace ID in chronological order.
 print(f"\n--- Full Trace for ID ({trace_id[:8]}...) ---")
 trace_spans = search_executions(
     limit=10,
     filters={"trace_id": trace_id},
     sort_by="timestamp_utc",
-    sort_ascending=True # Ascending sort for workflow flow analysis
+    sort_ascending=True # Sort ascending to analyze workflow
 )
 
 for i, span in enumerate(trace_spans):
     print(f"  - [Span {i+1}] {span['function_name']} ({span['duration_ms']:.2f}ms)")
-    # Captured arguments (user_id, amount, etc.) are displayed for the child spans.
+    # Captured arguments (user_id, amount, etc.) from child spans will also be visible.
     
-# Example Output:
+# Expected Output:
 # - [Span 1] step_1_validate_payment (100.81ms)
 # - [Span 2] step_2_send_receipt (202.06ms)
 # - [Span 3] process_payment (333.18ms)
 ```
+
 -----
 
 ## ⚙️ Configuration
@@ -153,10 +155,10 @@ You can select the text vectorization method via the `VECTORIZER` environment va
 
 | `VECTORIZER` Setting | Description | Required Additional Settings |
 | :--- | :--- | :--- |
-| **`huggingface`** | (Default Recommended) Uses the `sentence-transformers` library to vectorize on your local CPU. No API key is needed, making it great for immediate testing. | `HF_MODEL_NAME` (e.g., "sentence-transformers/all-MiniLM-L6-v2") |
-| **`openai_client`** | (High-Performance) Uses the OpenAI Python client to vectorize with modern models like `text-embedding-3-small`. | `OPENAI_API_KEY` (A valid OpenAI API key) |
-| **`weaviate_module`** | (Docker Delegate) Delegates the vectorization task to the Weaviate container's built-in module (e.g., `text2vec-openai`). | `WEAVIATE_VECTORIZER_MODULE`, `OPENAI_API_KEY` |
-| **`none`** | Disables vectorization. Data will be stored without vectors. | None |
+| **`huggingface`** | (Default Recommended) Uses the `sentence-transformers` library to vectorize on your local CPU. No API key is needed. | `HF_MODEL_NAME` (e.g., "sentence-transformers/all-MiniLM-L6-v2") |
+| **`openai_client`** | (High-Performance) Uses the OpenAI Python client to vectorize with models like `text-embedding-3-small`. | `OPENAI_API_KEY` (A valid OpenAI API key) |
+| **`weaviate_module`** | (Docker Delegate) Delegates vectorization to Weaviate's built-in module (e.g., `text2vec-openai`). | `WEAVIATE_VECTORIZER_MODULE`, `OPENAI_API_KEY` |
+| **`none`** | Disables vectorization. Data is stored without vectors. | None |
 
 -----
 
@@ -184,6 +186,7 @@ OPENAI_API_KEY=sk-...
 
 # --- [Advanced] Custom Properties ---
 CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
+FAILURE_MAPPING_FILE_PATH=.vectorwave_errors.json
 RUN_ID=test-run-001
 ```
 
@@ -209,6 +212,7 @@ HF_MODEL_NAME=...
 
 # --- [Advanced] Custom Properties ---
 CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
+FAILURE_MAPPING_FILE_PATH=.vectorwave_errors.json
 RUN_ID=test-run-001
 ```
 
@@ -233,7 +237,68 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # --- [Advanced] Custom Properties ---
 CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
+FAILURE_MAPPING_FILE_PATH=.vectorwave_errors.json
 RUN_ID=test-run-001
+```
+
+-----
+
+### 🚀 Advanced Failure Tracing (Error Code)
+
+This enhances `VectorWaveExecutions` logs beyond a simple `status: "ERROR"`. An `error_code` property is added to the schema for granular failure analysis.
+
+When a function wrapped by `@vectorize` or `@trace_span` fails, the `error_code` is automatically determined based on three priorities:
+
+1.  **Custom Exception Attribute (Priority 1):**
+    The most specific method. If the raised exception object `e` has an `e.error_code` attribute, its value is used.
+
+    ```python
+    class PaymentError(Exception):
+        def __init__(self, message, error_code):
+            super().__init__(message)
+            self.error_code = error_code # ⬅️ This attribute is detected.
+
+    @vectorize(...)
+    def process_payment(amount):
+        if amount < 0:
+            raise PaymentError("Amount < 0", error_code="PAYMENT_NEGATIVE_AMOUNT")
+
+    # DB Log on execution: { "status": "ERROR", "error_code": "PAYMENT_NEGATIVE_AMOUNT" }
+    ```
+
+2.  **Global Mapping File (Priority 2):**
+    Centrally manage common exceptions. VectorWave loads a JSON file specified by `FAILURE_MAPPING_FILE_PATH` in your `.env` (default: `.vectorwave_errors.json`) and maps the exception class name to a code.
+
+    **`.vectorwave_errors.json` Example:**
+
+    ```json
+    {
+      "ValueError": "INVALID_INPUT",
+      "KeyError": "CONFIG_MISSING",
+      "TypeError": "INVALID_INPUT"
+    }
+    ```
+
+    ```python
+    @vectorize(...)
+    def get_config(key):
+        return os.environ[key] # ⬅️ Raises KeyError
+
+    # DB Log on execution: { "status": "ERROR", "error_code": "CONFIG_MISSING" }
+    ```
+
+3.  **Default (Priority 3):**
+    If neither of the above applies, the exception's class name (e.g., `"ZeroDivisionError"`) is stored as the default `error_code`.
+
+**[Usage] Searching for Failures:**
+You can now filter for specific failure types using `search_executions`.
+
+```python
+# Find all failure logs categorized as "INVALID_INPUT"
+invalid_logs = search_executions(
+    filters={"error_code": "INVALID_INPUT"},
+    limit=10
+)
 ```
 
 -----
@@ -281,7 +346,7 @@ When a function is executed, VectorWave adds tags to the `VectorWaveExecutions` 
 VectorWave looks for environment variables matching the **UPPERCASE name** of the keys defined in Step 1 (e.g., `RUN_ID`, `EXPERIMENT_ID`). Found values are loaded as `global_custom_values` and added to *all* execution logs. Ideal for run-wide metadata.
 
 **2. Function-Specific Tags (Decorator)**
-You can pass tags as keyword arguments (`**execution_tags`) directly to the `@vectorize` decorator. Ideal for function-specific metadata.
+You can pass tags as keyword arguments (`**execution_tags`) directly to the `@vectorize` decorator. This is ideal for function-specific metadata.
 
 ```python
 # --- .env file ---
@@ -308,7 +373,7 @@ def other_function():
 
 **Tag Merging and Validation Rules**
 
-1.  **Validation (Important):** Tags (global or function-specific) will **only** be saved to Weaviate if their key (e.g., `run_id`, `team`, `priority`) was first defined in the `.weaviate_properties` file (Step 1). Tags not defined in the schema are **ignored**, and a warning is printed at script startup.
+1.  **Validation (Important):** Tags (global or function-specific) will **only** be saved to Weaviate if their key (e.g., `run_id`, `team`, `priority`) was first defined in the `.weaviate_properties` file (Step 1). Tags not defined in the schema are **ignored**, and a warning is logged at startup.
 
 2.  **Priority (Override):** If a tag key is defined in both places (e.g., global `RUN_ID` in `.env` and `run_id="override-xyz"` in the decorator), the **function-specific tag from the decorator always wins**.
 
@@ -321,9 +386,8 @@ def other_function():
 
 ## 🤝 Contributing
 
-All forms of contribution are welcome, including bug reports, feature requests, and code contributions. For details, please refer to [CONTRIBUTING.md](https://www.google.com/search?q=httpsS://www.google.com/search%3Fq%3DCONTRIBUTING.md).
+Bug reports, feature requests, and code contributions are all welcome. For details, please see [CONTRIBUTING.md](https://www.google.com/search?q=httpsS://www.google.com/search%3Fq%3DCONTRIBUTING.md).
 
 ## 📜 License
 
-This project is distributed under the MIT License. See the [LICENSE](https://www.google.com/search?q=httpsS://www.google.com/search%3Fq%3DLICENSE) file for details.
-
+This project is distributed under the MIT License. See the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
