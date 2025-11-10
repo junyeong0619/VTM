@@ -142,37 +142,105 @@ for i, span in enumerate(trace_spans):
 
 -----
 
+알겠습니다. 기존 `README_KR.md` 파일의 `⚙️ 설정 (Configuration)` 섹션을 **새로운 벡터화 전략** 내용으로 업데이트하고, 요청하신 대로 각 전략별 `.env` 설정 예시 코드를 추가하겠습니다.
+
+다음은 `vtm/docs_kr/README_KR.md` 파일의 **"-----"** 구분선 사이에 들어갈 업데이트된 **"설정"** 섹션의 전체 내용입니다.
+
+-----
+
 ## ⚙️ 설정 (Configuration)
 
-VectorWave는 Weaviate 데이터베이스 연결 정보를 **환경 변수** 또는 `.env` 파일을 통해 자동으로 읽어옵니다.
+VectorWave는 Weaviate 데이터베이스 연결 정보와 **벡터화 전략**을 **환경 변수** 또는 `.env` 파일을 통해 자동으로 읽어옵니다.
 
-라이브러리를 사용하는 당신의 프로젝트 루트 디렉터리(예: `main.py`가 있는 곳)에 `.env` 파일을 생성하고 필요한 값들을 설정하세요.
+라이브러리를 사용하는 당신의 프로젝트 루트 디렉터리(예: `test_ex/example.py`가 있는 곳)에 `.env` 파일을 생성하고 필요한 값들을 설정하세요.
 
-### .env 파일 예시
+### 벡터화 전략 설정 (VECTORIZER)
+
+`test_ex/.env` 파일의 `VECTORIZER` 환경 변수 설정을 통해 텍스트 벡터화 방식을 선택할 수 있습니다.
+
+| `VECTORIZER` 설정 | 설명 | 필요한 추가 설정 |
+| :--- | :--- | :--- |
+| **`huggingface`** | (기본 권장) 로컬 CPU에서 `sentence-transformers` 라이브러리를 사용해 벡터화합니다. API 키가 필요 없어 즉시 테스트 가능합니다. | `HF_MODEL_NAME` (예: "sentence-transformers/all-MiniLM-L6-v2") |
+| **`openai_client`** | (고성능) OpenAI Python 클라이언트를 사용하여 `text-embedding-3-small` 같은 최신 모델로 벡터화합니다. | `OPENAI_API_KEY` (유효한 OpenAI API 키) |
+| **`weaviate_module`** | (Docker 위임) 벡터화 작업을 Weaviate 도커 컨테이너의 내장 모듈 (예: `text2vec-openai`)에 위임합니다. | `WEAVIATE_VECTORIZER_MODULE`, `OPENAI_API_KEY` |
+| **`none`** | 벡터화를 수행하지 않습니다. 데이터는 벡터 없이 저장됩니다. | 없음 |
+
+-----
+
+### .env 파일 적용 예시
+
+사용하려는 전략에 맞춰 `.env` 파일의 내용을 구성하세요.
+
+#### 예시 1: `huggingface` 사용 (로컬, API 키 불필요)
+
+로컬 머신에서 `sentence-transformers` 모델을 사용합니다. API 키가 필요 없어 즉시 테스트에 용이합니다.
 
 ```ini
-# .env
+# .env (HuggingFace 사용 시)
 # --- 기본 Weaviate 연결 설정 ---
 WEAVIATE_HOST=localhost
 WEAVIATE_PORT=8080
 WEAVIATE_GRPC_PORT=50051
 
-# --- Vectorizer 및 Generative 모듈 설정 ---
-# (기본값: text2vec-openai) 'none'으로 설정하면 벡터화를 비활성화합니다.
-VECTORIZER_CONFIG=text2vec-openai
-# (기본값: generative-openai)
-GENERATIVE_CONFIG=generative-openai
-# text2vec-openai 모듈 등을 사용할 경우 OpenAI API 키가 필요합니다.
-OPENAI_API_KEY=sk-your-key-here
+# --- [전략 1] HuggingFace 설정 ---
+VECTORIZER="huggingface"
+HF_MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2"
+
+# (이 모드에서는 OPENAI_API_KEY가 필요하지 않습니다)
+OPENAI_API_KEY=sk-...
 
 # --- [고급] 커스텀 속성 설정 ---
-# 1. 스키마에 추가할 커스텀 속성을 정의한 JSON 파일의 경로입니다.
 CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
-
-# 2. '전역 동적 태깅'에 사용할 환경 변수입니다.
-#    (.weaviate_properties 파일에 "run_id"가 정의되어 있어야 함)
 RUN_ID=test-run-001
-EXPERIMENT_ID=exp-abc
+```
+
+#### 예시 2: `openai_client` 사용 (Python 클라이언트, 고성능)
+
+`openai` Python 라이브러리를 통해 직접 OpenAI API를 호출합니다.
+
+```ini
+# .env (OpenAI Python Client 사용 시)
+# --- 기본 Weaviate 연결 설정 ---
+WEAVIATE_HOST=localhost
+WEAVIATE_PORT=8080
+WEAVIATE_GRPC_PORT=50051
+
+# --- [전략 2] OpenAI Client 설정 ---
+VECTORIZER="openai_client"
+
+# [필수] 유효한 OpenAI API 키를 입력해야 합니다.
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# (이 모드에서는 HF_MODEL_NAME이 사용되지 않습니다)
+HF_MODEL_NAME=...
+
+# --- [고급] 커스텀 속성 설정 ---
+CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
+RUN_ID=test-run-001
+```
+
+#### 예시 3: `weaviate_module` 사용 (Docker 위임)
+
+벡터화 작업을 Python이 아닌 Weaviate 도커 컨테이너에 위임합니다. (`vw_docker.yml` 설정 참조)
+
+```ini
+# .env (Weaviate Module 위임 시)
+# --- 기본 Weaviate 연결 설정 ---
+WEAVIATE_HOST=localhost
+WEAVIATE_PORT=8080
+WEAVIATE_GRPC_PORT=50051
+
+# --- [전략 3] Weaviate Module 설정 ---
+VECTORIZER="weaviate_module"
+WEAVIATE_VECTORIZER_MODULE=text2vec-openai
+WEAVIATE_GENERATIVE_MODULE=generative-openai
+
+# [필수] Weaviate 컨테이너가 이 API 키를 읽어 사용합니다.
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# --- [고급] 커스텀 속성 설정 ---
+CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
+RUN_ID=test-run-001
 ```
 
 -----
@@ -255,7 +323,6 @@ def other_function():
 
 * `process_payment()` 실행 로그: `{"run_id": "global-run-abc", "team": "billing", "priority": 1}`
 * `other_function()` 실행 로그: `{"run_id": "override-run-xyz", "team": "default-team"}`
-
 -----
 
 ## 🤝 기여 (Contributing)

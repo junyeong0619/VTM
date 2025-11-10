@@ -139,51 +139,112 @@ for i, span in enumerate(trace_spans):
 # - [Span 2] step_2_send_receipt (202.06ms)
 # - [Span 3] process_payment (333.18ms)
 ```
-
 -----
 
 ## ⚙️ Configuration
 
-VectorWave automatically reads Weaviate database connection information from **environment variables** or a `.env` file.
+VectorWave automatically reads Weaviate database connection info and **vectorization strategy** from **environment variables** or a `.env` file.
 
-Create a `.env` file in the root directory of your project (e.g., where `main.py` is located) and set the required values.
+Create a `.env` file in your project's root directory (e.g., where `test_ex/example.py` is located) and set the required values.
 
-### .env File Example
+### Vectorizer Strategy (VECTORIZER)
+
+You can select the text vectorization method via the `VECTORIZER` environment variable in your `test_ex/.env` file.
+
+| `VECTORIZER` Setting | Description | Required Additional Settings |
+| :--- | :--- | :--- |
+| **`huggingface`** | (Default Recommended) Uses the `sentence-transformers` library to vectorize on your local CPU. No API key is needed, making it great for immediate testing. | `HF_MODEL_NAME` (e.g., "sentence-transformers/all-MiniLM-L6-v2") |
+| **`openai_client`** | (High-Performance) Uses the OpenAI Python client to vectorize with modern models like `text-embedding-3-small`. | `OPENAI_API_KEY` (A valid OpenAI API key) |
+| **`weaviate_module`** | (Docker Delegate) Delegates the vectorization task to the Weaviate container's built-in module (e.g., `text2vec-openai`). | `WEAVIATE_VECTORIZER_MODULE`, `OPENAI_API_KEY` |
+| **`none`** | Disables vectorization. Data will be stored without vectors. | None |
+
+-----
+
+### .env File Examples
+
+Configure your `.env` file according to the strategy you want to use.
+
+#### Example 1: Using `huggingface` (Local, No API Key)
+
+Uses a `sentence-transformers` model on your local machine. Ideal for testing without API keys.
 
 ```ini
-# .env
-# --- Basic Weaviate Connection Settings ---
+# .env (Using HuggingFace)
+# --- Basic Weaviate Connection ---
 WEAVIATE_HOST=localhost
 WEAVIATE_PORT=8080
 WEAVIATE_GRPC_PORT=50051
 
-# --- Vectorizer , Generative Module Config ---
-# (default: text2vec-openai) Set to 'none' to disable vectorization.
-VECTORIZER_CONFIG=text2vec-openai
-# (default: generative-openai)
-GENERATIVE_CONFIG=generative-openai
-# An OpenAI API key is required if using modules like text2vec-openai.
-# OPENAI_API_KEY=sk-your-key-here
+# --- [Strategy 1] HuggingFace Config ---
+VECTORIZER="huggingface"
+HF_MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2"
 
-# --- [Advanced] Custom Property Settings ---
-# 1. The path to the JSON file defining custom properties to add to the schema.
+# (OPENAI_API_KEY is not required for this mode)
+OPENAI_API_KEY=sk-...
+
+# --- [Advanced] Custom Properties ---
 CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
-
-# 2. Environment variables to be used for 'Global Dynamic Tagging'.
-#    ("run_id" must be defined in the .weaviate_properties file)
 RUN_ID=test-run-001
-EXPERIMENT_ID=exp-abc
+```
+
+#### Example 2: Using `openai_client` (Python Client, High-Performance)
+
+Directly calls the OpenAI API via the `openai` Python library.
+
+```ini
+# .env (Using OpenAI Python Client)
+# --- Basic Weaviate Connection ---
+WEAVIATE_HOST=localhost
+WEAVIATE_PORT=8080
+WEAVIATE_GRPC_PORT=50051
+
+# --- [Strategy 2] OpenAI Client Config ---
+VECTORIZER="openai_client"
+
+# [Required] You must enter a valid OpenAI API key.
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# (HF_MODEL_NAME is not used in this mode)
+HF_MODEL_NAME=...
+
+# --- [Advanced] Custom Properties ---
+CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
+RUN_ID=test-run-001
+```
+
+#### Example 3: Using `weaviate_module` (Docker Delegate)
+
+Delegates vectorization to the Weaviate Docker container instead of Python. (See `vw_docker.yml` config).
+
+```ini
+# .env (Delegating to Weaviate Module)
+# --- Basic Weaviate Connection ---
+WEAVIATE_HOST=localhost
+WEAVIATE_PORT=8080
+WEAVIATE_GRPC_PORT=50051
+
+# --- [Strategy 3] Weaviate Module Config ---
+VECTORIZER="weaviate_module"
+WEAVIATE_VECTORIZER_MODULE=text2vec-openai
+WEAVIATE_GENERATIVE_MODULE=generative-openai
+
+# [Required] The Weaviate container will read this API key.
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# --- [Advanced] Custom Properties ---
+CUSTOM_PROPERTIES_FILE_PATH=.weaviate_properties
+RUN_ID=test-run-001
 ```
 
 -----
 
 ### Custom Properties and Dynamic Execution Tagging
 
-VectorWave can store user-defined metadata in both static definitions (`VectorWaveFunctions`) and dynamic logs (`VectorWaveExecutions`). This works in two steps.
+VectorWave can store user-defined metadata in addition to static data (function definitions) and dynamic data (execution logs). This works in two steps.
 
-#### Step 1: Define Custom Schema (The "Allow-List")
+#### Step 1: Define Custom Schema (Tag "Allow-list")
 
-Create a JSON file at the path specified by `CUSTOM_PROPERTIES_FILE_PATH` (default: `.weaviate_properties`).
+Create a JSON file at the path specified by `CUSTOM_PROPERTIES_FILE_PATH` in your `.env` file (default: `.weaviate_properties`).
 
 This file instructs VectorWave to add **new properties (columns)** to the Weaviate collections. This file acts as an **"allow-list"** for all custom tags.
 
@@ -210,17 +271,17 @@ This file instructs VectorWave to add **new properties (columns)** to the Weavia
 }
 ```
 
-* Defining these will add `run_id`, `experiment_id`, `team`, and `priority` properties to *both* collections.
+* This definition will add `run_id`, `experiment_id`, `team`, and `priority` properties to both the `VectorWaveFunctions` and `VectorWaveExecutions` collections.
 
 #### Step 2: Dynamic Execution Tagging (Adding Values)
 
-When a function executes, VectorWave adds tags to the `VectorWaveExecutions` log. It does this in two ways, which are then merged:
+When a function is executed, VectorWave adds tags to the `VectorWaveExecutions` log. These tags are collected and merged from two sources.
 
-**1. Global Tags (from Environment Variables)**
-VectorWave searches for environment variables whose names match the **uppercase** keys from Step 1 (e.g., `RUN_ID`, `EXPERIMENT_ID`) and uses these for run-wide metadata.
+**1. Global Tags (Environment Variables)**
+VectorWave looks for environment variables matching the **UPPERCASE name** of the keys defined in Step 1 (e.g., `RUN_ID`, `EXPERIMENT_ID`). Found values are loaded as `global_custom_values` and added to *all* execution logs. Ideal for run-wide metadata.
 
-**2. Function-Specific Tags (from Decorator)**
-You can pass tags directly to the `@vectorize` decorator as keyword arguments (`**execution_tags`). This is ideal for function-specific metadata.
+**2. Function-Specific Tags (Decorator)**
+You can pass tags as keyword arguments (`**execution_tags`) directly to the `@vectorize` decorator. Ideal for function-specific metadata.
 
 ```python
 # --- .env file ---
@@ -228,7 +289,7 @@ You can pass tags directly to the `@vectorize` decorator as keyword arguments (`
 # TEAM=default-team
 
 @vectorize(
-    search_description="Process a payment",
+    search_description="Process payment",
     sequence_narrative="...",
     team="billing",  # <-- Function-specific tag
     priority=1       # <-- Function-specific tag
@@ -247,14 +308,14 @@ def other_function():
 
 **Tag Merging and Validation Rules**
 
-1.  **Validation (Most Important):** A tag (either global or specific) will **only** be saved to Weaviate if its key (e.g., `run_id`, `team`, `priority`) was first defined in your `.weaviate_properties` file (Step 1). Tags not defined in the schema will be **ignored**, and a warning will be printed on startup.
+1.  **Validation (Important):** Tags (global or function-specific) will **only** be saved to Weaviate if their key (e.g., `run_id`, `team`, `priority`) was first defined in the `.weaviate_properties` file (Step 1). Tags not defined in the schema are **ignored**, and a warning is printed at script startup.
 
-2.  **Priority (Override):** If a tag key is defined in both places (e.g., a global `RUN_ID` in `.env` and a specific `run_id="override-run-xyz"` on the decorator), the **function-specific tag from the decorator will always win**.
+2.  **Priority (Override):** If a tag key is defined in both places (e.g., global `RUN_ID` in `.env` and `run_id="override-xyz"` in the decorator), the **function-specific tag from the decorator always wins**.
 
 **Resulting Logs:**
 
-* `process_payment()` log will have: `{"run_id": "global-run-abc", "team": "billing", "priority": 1}`
-* `other_function()` log will have: `{"run_id": "override-run-xyz", "team": "default-team"}`
+* `process_payment()` execution log: `{"run_id": "global-run-abc", "team": "billing", "priority": 1}`
+* `other_function()` execution log: `{"run_id": "override-run-xyz", "team": "default-team"}`
 
 -----
 
