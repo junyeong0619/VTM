@@ -9,10 +9,17 @@ from vectorwave.models.db_config import WeaviateSettings
 from vectorwave.batch.batch import get_batch_manager as real_get_batch_manager
 from vectorwave.database.db import get_cached_client as real_get_cached_client
 from vectorwave.models.db_config import get_weaviate_settings as real_get_settings
+from vectorwave.monitoring.tracer import TraceCollector, current_tracer_var
 
 # Module paths to mock (adjust to your project structure if needed)
 TRACER_MODULE_PATH = "vectorwave.monitoring.tracer"
 BATCH_MODULE_PATH = "vectorwave.batch.batch"
+
+
+class CustomErrorWithCode(Exception):
+    def __init__(self, message, error_code):
+        super().__init__(message)
+        self.error_code = error_code
 
 
 @pytest.fixture
@@ -30,7 +37,8 @@ def mock_tracer_deps(monkeypatch):
         COLLECTION_NAME="TestFunctions",
         EXECUTION_COLLECTION_NAME="TestExecutions",
         custom_properties=None,  # Not important for this test
-        global_custom_values={"run_id": "global-run-abc", "env": "test"}
+        global_custom_values={"run_id": "global-run-abc", "env": "test"},
+        failure_mapping={"ValueError": "INVALID_INPUT"}
     )
     mock_get_settings = MagicMock(return_value=mock_settings)
 
@@ -84,6 +92,7 @@ def test_trace_root_and_span_success(mock_tracer_deps):
     assert props["status"] == "SUCCESS"
     assert props["function_name"] == "my_inner_span"
     assert props["error_message"] is None
+    assert kwargs["properties"]["error_code"] is None
     assert "trace_id" in props
     assert props["run_id"] == "global-run-abc"
     assert props["env"] == "test"
@@ -115,6 +124,7 @@ def test_trace_span_failure(mock_tracer_deps):
 
     assert props["status"] == "ERROR"
     assert "ValueError: This is a test error" in props["error_message"]
+    assert kwargs["properties"]["error_code"] == "INVALID_INPUT"
     assert props["function_name"] == "my_failing_span"
     assert props["run_id"] == "global-run-abc"
 
@@ -200,3 +210,47 @@ def test_root_accepts_custom_trace_id(mock_tracer_deps):
 
     # Check if the trace_id was popped and injected correctly
     assert props["trace_id"] == "my-custom-trace-id-123"
+
+
+def test_trace_span_error_code_priority_1_custom_attr(mock_tracer_deps):
+    """Test (Priority 1) custom e.error_code attribute."""
+    mock_batch = mock_tracer_deps["batch"]
+    tracer = TraceCollector(trace_id="test_trace_p1")
+    tracer.settings = mock_tracer_deps["settings"]
+
+    @trace_span()
+    def my_custom_fail_function():
+        raise CustomErrorWithCode("Test", "PAYMENT_FAILED_001")
+
+    token = current_tracer_var.set(tracer)
+    try:
+        with pytest.raises(CustomErrorWithCode):
+            my_custom_fail_function()
+    finally:
+        current_tracer_var.reset(token)
+
+    args, kwargs = mock_batch.add_object.call_args
+    assert kwargs["properties"]["status"] == "ERROR"
+    assert kwargs["properties"]["error_code"] == "PAYMENT_FAILED_001"
+
+
+def test_trace_span_error_code_priority_3_default_class_name(mock_tracer_deps):
+    """Test (Priority 3) default class name (KeyError is not in mapping)."""
+    mock_batch = mock_tracer_deps["batch"]
+    tracer = TraceCollector(trace_id="test_trace_p3")
+    tracer.settings = mock_tracer_deps["settings"]
+
+    @trace_span()
+    def my_key_error_function():
+        _ = {}["missing_key"]  # Raises KeyError
+
+    token = current_tracer_var.set(tracer)
+    try:
+        with pytest.raises(KeyError):
+            my_key_error_function()
+    finally:
+        current_tracer_var.reset(token)
+
+    args, kwargs = mock_batch.add_object.call_args
+    assert kwargs["properties"]["status"] == "ERROR"
+    assert kwargs["properties"]["error_code"] == "KeyError"
