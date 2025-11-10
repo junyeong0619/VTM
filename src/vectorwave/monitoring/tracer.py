@@ -71,6 +71,7 @@ def trace_span(
             start_time = time.perf_counter()
             status = "SUCCESS"
             error_msg = None
+            error_code = None
             result = None
 
             captured_attributes = {}
@@ -91,6 +92,21 @@ def trace_span(
             except Exception as e:
                 status = "ERROR"
                 error_msg = traceback.format_exc()
+
+                try:
+                    if hasattr(e, 'error_code'):
+                        error_code = str(e.error_code)
+
+                    elif tracer.settings.failure_mapping:
+                        exception_class_name = type(e).__name__
+                        if exception_class_name in tracer.settings.failure_mapping:
+                            error_code = tracer.settings.failure_mapping[exception_class_name]
+
+                    if not error_code:
+                        error_code = type(e).__name__
+                except Exception as e_code:
+                    logger.warning(f"Failed to determine error_code: {e_code}")
+                    error_code = "UNKNOWN_ERROR_CODE_FAILURE"
                 raise e
             finally:
                 duration_ms = (time.perf_counter() - start_time) * 1000
@@ -103,6 +119,7 @@ def trace_span(
                     "duration_ms": duration_ms,
                     "status": status,
                     "error_message": error_msg,
+                    "error_code": error_code,
                 }
 
                 # 1. Apply global tags first.
