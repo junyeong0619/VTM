@@ -268,6 +268,11 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
             data_type=wvc.DataType.TEXT,
             description="Error message and traceback if status is 'ERROR'"
         ),
+        wvc.Property(
+            name="error_code",
+            data_type=wvc.DataType.TEXT,
+            description="Categorized error code for the failure (e.g., 'INVALID_INPUT', 'TIMEOUT')"
+        ),
     ]
 
     if settings.custom_properties:
@@ -303,7 +308,6 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
             name=collection_name,
             properties=properties,
             vector_config=wvc.Configure.Vectorizer.none(),
-            # vector_index_config=wvc.Configure.VectorIndex.none()
         )
         logger.info("Collection '%s' created successfully", collection_name)
         return execution_collection
