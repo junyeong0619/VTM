@@ -1,3 +1,4 @@
+import logging
 import weaviate
 import weaviate.classes.config as wvc # (wvc = Weaviate Classes Config)
 import weaviate.config as wvc_config
@@ -12,6 +13,8 @@ from functools import lru_cache
 from weaviate.exceptions import WeaviateConnectionError as WeaviateClientConnectionError
 from vectorwave.models.db_config import get_weaviate_settings
 
+# Create module-level logger
+logger = logging.getLogger(__name__)
 
 # Code based on Weaviate v4 (latest) client.
 
@@ -46,7 +49,7 @@ def get_weaviate_client(settings: WeaviateSettings) -> weaviate.WeaviateClient:
     if not client.is_ready():
         raise WeaviateNotReadyError("Connected to Weaviate, but the server is not ready.")
 
-    print("Weaviate client connected successfully.")
+    logger.info("Weaviate client connected successfully")
     return client
 
 @lru_cache()
@@ -55,7 +58,7 @@ def get_cached_client() -> weaviate.WeaviateClient:
     Singleton factory: Gets settings and returns a single client instance.
     This function IS cached.
     """
-    print("Creating and caching new Weaviate client instance...")
+    logger.debug("Creating and caching new Weaviate client instance")
     settings = get_weaviate_settings()
     client = get_weaviate_client(settings)
     return client
@@ -73,11 +76,11 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
 
     # 1. Check if the collection already exists
     if client.collections.exists(collection_name):
-        print(f"Collection '{collection_name}' already exists. Skipping creation.")
+        logger.info("Collection '%s' already exists, skipping creation", collection_name)
         return client.collections.get(collection_name)
 
     # 2. If it doesn't exist, define and create the collection
-    print(f"Creating collection '{collection_name}'...")
+    logger.info("Creating collection '%s'", collection_name)
 
     # 3. Define Base Properties
     base_properties = [
@@ -116,7 +119,12 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
     # 4. Parse Custom Properties (loaded from JSON file via settings object)
     custom_properties = []
     if settings.custom_properties:
-        print(f"Adding custom properties: {list(settings.custom_properties.keys())}")
+        logger.info(
+            "Adding %d custom properties to '%s': %s",
+            len(settings.custom_properties),
+            collection_name,
+            list(settings.custom_properties.keys())
+        )
 
         for name, prop_details in settings.custom_properties.items():
             if not isinstance(prop_details, dict):
@@ -155,7 +163,7 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
     vectorizer_name = settings.VECTORIZER_CONFIG.lower()
     vector_config = None
 
-    print(f"Configuring vectorizer: {vectorizer_name}")
+    logger.info("Configuring vectorizer: %s", vectorizer_name)
 
     if vectorizer_name == "text2vec-openai":
         vector_config = {
@@ -202,10 +210,10 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
     collection_name = settings.EXECUTION_COLLECTION_NAME
 
     if client.collections.exists(collection_name):
-        print(f"Collection '{collection_name}' already exists. Skipping creation.")
+        logger.info("Collection '%s' already exists, skipping creation", collection_name)
         return client.collections.get(collection_name)
 
-    print(f"Creating collection '{collection_name}'...")
+    logger.info("Creating collection '%s'", collection_name)
 
     properties = [
         wvc.Property(
@@ -251,7 +259,11 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
     ]
 
     if settings.custom_properties:
-        print(f"Adding custom properties to '{collection_name}': {list(settings.custom_properties.keys())}")
+        logger.info(
+            "Adding %d custom properties: %s",
+            len(settings.custom_properties),
+            list(settings.custom_properties.keys())
+        )
         for name, prop_details in settings.custom_properties.items():
             try:
                 if not isinstance(prop_details, dict):
@@ -272,7 +284,7 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
                     )
                 )
             except Exception as e:
-                print(f"Warning: Skipping custom property {name} for {collection_name}: {e}")
+                logger.warning("Skipping custom property '%s' for '%s': %s", name, collection_name, e)
 
     try:
         execution_collection = client.collections.create(
@@ -281,7 +293,7 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
             vectorizer_config=wvc.Configure.Vectorizer.none(),
             vector_index_config=wvc.Configure.VectorIndex.none()
         )
-        print(f"Collection '{collection_name}' created successfully.")
+        logger.info("Collection '%s' created successfully", collection_name)
         return execution_collection
     except Exception as e:
         raise SchemaCreationError(f"Error during execution schema creation: {e}")
@@ -298,5 +310,5 @@ def initialize_database():
             create_execution_schema(client, settings)
             return client
     except Exception as e:
-        print(f"Failed to initialize VectorWave database: {e}")
+        logger.error("Failed to initialize VectorWave database: %s", e)
         return None

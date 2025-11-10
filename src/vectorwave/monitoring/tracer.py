@@ -1,3 +1,4 @@
+import logging
 import inspect
 import time
 import traceback
@@ -10,6 +11,8 @@ from datetime import datetime, timezone
 from ..batch.batch import get_batch_manager
 from ..models.db_config import get_weaviate_settings, WeaviateSettings
 
+# Create module-level logger
+logger = logging.getLogger(__name__)
 
 class TraceCollector:
     def __init__(self, trace_id: str):
@@ -81,7 +84,7 @@ def trace_span(
                                 value = str(value)
                             captured_attributes[attr_name] = value
                 except Exception as e:
-                    print(f"Warning: Failed to capture attributes for {func.__name__}: {e}")
+                    logger.warning("Failed to capture attributes for '%s': %s", func.__name__, e)
 
             try:
                 result = func(*args, **kwargs)
@@ -116,7 +119,7 @@ def trace_span(
                         properties=span_properties
                     )
                 except Exception as e:
-                    print(f"Error: Failed to log span for {func.__name__} (trace_id: {tracer.trace_id}): {e}")
+                    logger.error("Failed to log span for '%s' (trace_id: %s): %s", func.__name__, tracer.trace_id, e)
 
             return result
 

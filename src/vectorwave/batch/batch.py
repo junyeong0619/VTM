@@ -6,7 +6,8 @@ from ..models.db_config import get_weaviate_settings, WeaviateSettings
 from ..database.db import get_weaviate_client
 from ..exception.exceptions import WeaviateConnectionError
 
-
+# Create module-level logger
+logger = logging.getLogger(__name__)
 
 class WeaviateBatchManager:
     """
@@ -15,7 +16,7 @@ class WeaviateBatchManager:
 
     def __init__(self):
         self._initialized = False
-        print("Initializing WeaviateBatchManager...")
+        logger.debug("Initializing WeaviateBatchManager")
         self.client: weaviate.WeaviateClient = None
 
         try:
@@ -35,18 +36,18 @@ class WeaviateBatchManager:
             # Register atexit: Automatically calls self.flush() on script exit
             # atexit.register(self.flush)
             self._initialized = True
-            print("WeaviateBatchManager initialized and 'atexit' flush registered.")
+            logger.info("WeaviateBatchManager initialized successfully")
 
         except Exception as e:
             # Prevents VectorWave from stopping the main app upon DB connection failure
-            print(f"Failed to initialize WeaviateBatchManager: {e}. Batching will be disabled.")
+            logger.error("Failed to initialize WeaviateBatchManager: %s", e)
 
     def add_object(self, collection: str, properties: dict, uuid: str = None):
         """
         Adds an object to the Weaviate batch queue.
         """
         if not self._initialized or not self.client:
-            print("Warning: Batch manager not initialized. Skipping add_object.") # print 유지
+            logger.warning("Batch manager not initialized, skipping add_object")
             return
 
         try:
@@ -56,7 +57,7 @@ class WeaviateBatchManager:
             )
 
         except Exception as e:
-            print(f"Error: Failed to add object to batch (Collection: {collection}): {e}")
+            logger.error("Failed to add object to batch (collection '%s'): %s", collection, e)
 
 
 

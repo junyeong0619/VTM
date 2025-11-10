@@ -1,5 +1,6 @@
 # vtm/src/vectorwave/core/decorator.py
 
+import logging
 import inspect
 from functools import wraps
 
@@ -9,6 +10,8 @@ from ..batch.batch import get_batch_manager
 from ..models.db_config import get_weaviate_settings
 from ..monitoring.tracer import trace_root, trace_span
 
+# Create module-level logger
+logger = logging.getLogger(__name__)
 
 def vectorize(search_description: str,
               sequence_narrative: str,
@@ -45,8 +48,8 @@ def vectorize(search_description: str,
 
             if execution_tags:
                 if not settings.custom_properties:
-                    print(
-                        f"Warning: Function '{function_name}' provided execution_tags {list(execution_tags.keys())} "
+                    logger.warning(
+                        f"Function '{function_name}' provided execution_tags {list(execution_tags.keys())} "
                         f"but no .weaviate_properties file was loaded. These tags will be IGNORED."
                     )
                 else:
@@ -55,9 +58,11 @@ def vectorize(search_description: str,
                         if key in allowed_keys:
                             valid_execution_tags[key] = value
                         else:
-                            print(
-                                f"Warning: Function '{function_name}' has undefined execution_tag: '{key}'. "
-                                f"This tag will be IGNORED. Please add it to your .weaviate_properties file."
+                            logger.warning(
+                                "Function '%s' has undefined execution_tag: '%s'. "
+                                "This tag will be IGNORED. Please add it to your .weaviate_properties file.",
+                                function_name,
+                                key
                             )
 
             batch.add_object(
@@ -67,7 +72,7 @@ def vectorize(search_description: str,
             )
 
         except Exception as e:
-            print(f"Error in @vectorize setup for {func.__name__}: {e}")
+            logger.error("Error in @vectorize setup for '%s': %s", func.__name__, e)
 
 
         # 2a. The *inner* wrapper to be wrapped by @trace_span

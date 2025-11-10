@@ -1,3 +1,4 @@
+import logging
 import weaviate
 import weaviate.classes as wvc
 from typing import Dict, Any, Optional, List
@@ -11,6 +12,8 @@ from ..exception.exceptions import WeaviateConnectionError
 import uuid
 from datetime import datetime
 
+# Create module-level logger
+logger = logging.getLogger(__name__)
 
 def _build_weaviate_filters(filters: Optional[Dict[str, Any]]) -> _Filters | None:
     if not filters:
@@ -54,7 +57,7 @@ def search_functions(query: str, limit: int = 5, filters: Optional[Dict[str, Any
         return results
 
     except Exception as e:
-        print(f"Error during Weaviate search: {e}")
+        logger.error("Error during Weaviate search: %s", e)
         raise WeaviateConnectionError(f"Failed to execute 'search_functions': {e}")
 
 

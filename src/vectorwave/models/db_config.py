@@ -1,9 +1,12 @@
+import logging
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from typing import Dict, Optional, Any
 import json
 import os
 
+# Create module-level logger
+logger = logging.getLogger(__name__)
 
 class WeaviateSettings(BaseSettings):
     """
@@ -43,7 +46,7 @@ def get_weaviate_settings() -> WeaviateSettings:
     file_path = settings.CUSTOM_PROPERTIES_FILE_PATH
 
     if file_path and os.path.exists(file_path):
-        print(f"Loading custom properties schema from '{file_path}'...")
+        logger.info("Loading custom properties schema from '%s'", file_path)
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 loaded_data = json.load(f)
@@ -51,25 +54,25 @@ def get_weaviate_settings() -> WeaviateSettings:
                 if isinstance(loaded_data, dict):
                     settings.custom_properties = loaded_data
                 else:
-                    print(
-                        f"Warning: Content in '{file_path}' is not a valid dictionary (JSON root). "
-                        f"Custom properties will not be loaded."
+                    logger.warning(
+                        "Content in '%s' is not a valid dictionary (JSON root), custom properties will not be loaded",
+                        file_path
                     )
                     settings.custom_properties = None
 
         except json.JSONDecodeError as e:
-            print(f"Warning: Could not parse JSON from '{file_path}'. File might be malformed. {e}")
+            logger.warning("Could not parse JSON from '%s': %s", file_path, e)
             settings.custom_properties = None
         except Exception as e:
-            print(f"Warning: Could not read file '{file_path}': {e}")
+            logger.warning("Could not read file '%s': %s", file_path, e)
             settings.custom_properties = None
 
     elif file_path:
-        print(f"Note: Custom properties file not found at '{file_path}'. Skipping schema.")
+        logger.debug("Custom properties file not found at '%s', skipping", file_path)
 
     if settings.custom_properties:
         settings.global_custom_values = {}
-        print(f"Loading global custom values from environment variables...")
+        logger.debug("Loading global custom values from environment variables")
 
         for prop_name in settings.custom_properties.keys():
             env_var_name = prop_name.upper()
@@ -77,6 +80,6 @@ def get_weaviate_settings() -> WeaviateSettings:
 
             if value:
                 settings.global_custom_values[prop_name] = value
-                print(f"Loaded global value for '{prop_name}' from env var '{env_var_name}'.")
+                logger.debug("Loaded global value for '%s' from env var '%s'", prop_name, env_var_name)
 
     return settings
