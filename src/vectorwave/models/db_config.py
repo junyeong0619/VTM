@@ -23,10 +23,17 @@ class WeaviateSettings(BaseSettings):
     EXECUTION_COLLECTION_NAME: str = "VectorWaveExecutions"
     IS_VECTORIZE_COLLECTION_NAME: bool = True
 
-    # Configure to read from a .env file (optional)
+    # "weaviate_module", "huggingface", "openai_client", "none"
+    VECTORIZER: str = "weaviate_module"
 
-    VECTORIZER_CONFIG: str = "text2vec-openai"
-    GENERATIVE_CONFIG: str = "generative-openai"
+
+    WEAVIATE_VECTORIZER_MODULE: str = "text2vec-openai"
+
+    WEAVIATE_GENERATIVE_MODULE: str = "generative-openai"
+
+    # [신규] Python 클라이언트용 설정
+    OPENAI_API_KEY: Optional[str] = None
+    HF_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     CUSTOM_PROPERTIES_FILE_PATH: str = ".weaviate_properties"
     custom_properties: Optional[Dict[str, Dict[str, Any]]] = None
