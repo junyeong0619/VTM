@@ -1,6 +1,6 @@
 import logging
 import weaviate
-import weaviate.classes.config as wvc # (wvc = Weaviate Classes Config)
+import weaviate.classes.config as wvc  # (wvc = Weaviate Classes Config)
 import weaviate.config as wvc_config
 from weaviate.config import AdditionalConfig
 from vectorwave.models.db_config import WeaviateSettings
@@ -12,6 +12,7 @@ from vectorwave.exception.exceptions import (
 from functools import lru_cache
 from weaviate.exceptions import WeaviateConnectionError as WeaviateClientConnectionError
 from vectorwave.models.db_config import get_weaviate_settings
+from vectorwave.vectorizer.factory import get_vectorizer
 
 # Create module-level logger
 logger = logging.getLogger(__name__)
@@ -35,9 +36,9 @@ def get_weaviate_client(settings: WeaviateSettings) -> weaviate.WeaviateClient:
             port=settings.WEAVIATE_PORT,
             grpc_port=settings.WEAVIATE_GRPC_PORT,
             additional_config=AdditionalConfig(
-                    dynamic=True,
-                    batch_size=20,
-                    timeout_retries=3
+                dynamic=True,
+                batch_size=20,
+                timeout_retries=3
             )
         )
     except WeaviateClientConnectionError as e:
@@ -45,12 +46,12 @@ def get_weaviate_client(settings: WeaviateSettings) -> weaviate.WeaviateClient:
     except Exception as e:
         raise WeaviateConnectionError(f"An unknown error occurred while connecting to Weaviate: {e}")
 
-
     if not client.is_ready():
         raise WeaviateNotReadyError("Connected to Weaviate, but the server is not ready.")
 
     logger.info("Weaviate client connected successfully")
     return client
+
 
 @lru_cache()
 def get_cached_client() -> weaviate.WeaviateClient:
@@ -160,30 +161,41 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
     # 5. Combine properties
     all_properties = base_properties + custom_properties
 
-    vectorizer_name = settings.VECTORIZER_CONFIG.lower()
     vector_config = None
+    vectorizer_name_setting = settings.VECTORIZER.lower()
 
-    logger.info("Configuring vectorizer: %s", vectorizer_name)
+    logger.info("Configuring vectorizer: %s", vectorizer_name_setting)
 
-    if vectorizer_name == "text2vec-openai":
-        vector_config = {
-            "vectorizer": "text2vec-openai",
-            "text2vec-openai": {
-                "vectorizeClassName": settings.IS_VECTORIZE_COLLECTION_NAME,
-            }
-        }
-    elif vectorizer_name == "none":
-        vector_config = {"vectorizer": "none"}
+    if vectorizer_name_setting == "huggingface" or vectorizer_name_setting == "openai_client":
+        print(f"Python-based vectorizer ('{vectorizer_name_setting}') is active.")
+        print("Setting Weaviate schema vectorizer to 'none'.")
+        vector_config = wvc.Configure.Vectorizer.none()
+
+    elif vectorizer_name_setting == "weaviate_module":
+        module_name = settings.WEAVIATE_VECTORIZER_MODULE.lower()
+        print(f"Using Weaviate internal module: '{module_name}'")
+
+        if module_name == "text2vec-openai":
+            vector_config = wvc.Configure.Vectorizer.text2vec_openai(
+                vectorize_collection_name=settings.IS_VECTORIZE_COLLECTION_NAME
+            )
+        # (필요시 다른 Weaviate 모듈도 여기에 추가)
+        else:
+            raise SchemaCreationError(
+                f"Unsupported WEAVIATE_VECTORIZER_MODULE: '{module_name}'.")
+
+    elif vectorizer_name_setting == "none":
+        # 벡터화 비활성화
+        print("Vectorizer is set to 'none'.")
+        vector_config = wvc.Configure.Vectorizer.none()
+
     else:
         raise SchemaCreationError(
-            f"Unsupported VECTORIZER_CONFIG: '{settings.VECTORIZER_CONFIG}'. "
-            f"Supported values: 'text2vec-openai', 'none'."
-        )
+            f"Invalid VECTORIZER setting: '{vectorizer_name_setting}'.")
 
     generative_config = None
-    if settings.GENERATIVE_CONFIG.lower() == "generative-openai":
-        generative_config = {"generator": "generative-openai"}
-
+    if settings.WEAVIATE_GENERATIVE_MODULE.lower() == "generative-openai":
+        generative_config = wvc.Configure.Generative.openai()
 
     try:
         vectorwave_collection = client.collections.create(
@@ -248,7 +260,7 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
         ),
         wvc.Property(
             name="status",
-            data_type=wvc.DataType.TEXT, # "SUCCESS" or "ERROR"
+            data_type=wvc.DataType.TEXT,  # "SUCCESS" or "ERROR"
             description="Execution status"
         ),
         wvc.Property(
@@ -290,13 +302,14 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
         execution_collection = client.collections.create(
             name=collection_name,
             properties=properties,
-            vectorizer_config=wvc.Configure.Vectorizer.none(),
-            vector_index_config=wvc.Configure.VectorIndex.none()
+            vector_config=wvc.Configure.Vectorizer.none(),
+            # vector_index_config=wvc.Configure.VectorIndex.none()
         )
         logger.info("Collection '%s' created successfully", collection_name)
         return execution_collection
     except Exception as e:
         raise SchemaCreationError(f"Error during execution schema creation: {e}")
+
 
 def initialize_database():
     """
@@ -310,5 +323,10 @@ def initialize_database():
             create_execution_schema(client, settings)
             return client
     except Exception as e:
+<<<<<<< HEAD
         logger.error("Failed to initialize VectorWave database: %s", e)
         return None
+=======
+        print(f"Failed to initialize VectorWave database: {e}")
+        return None
+>>>>>>> eaf0ebe (refactor(schema): Update Schema Creation Logic for New Vectorization Strategy)
