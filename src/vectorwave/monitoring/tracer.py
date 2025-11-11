@@ -31,22 +31,43 @@ def trace_root() -> Callable:
     """
 
     def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            if current_tracer_var.get() is not None:
-                return func(*args, **kwargs)
 
-            trace_id = kwargs.pop('trace_id', str(uuid4()))
-            tracer = TraceCollector(trace_id=trace_id)
-            token = current_tracer_var.set(tracer)
+        # check the original function is async
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                if current_tracer_var.get() is not None:
+                    # then using await
+                    return await func(*args, **kwargs)
 
-            try:
-                # ⭐️ Key: Here, func is the wrapper of @trace_span.
-                return func(*args, **kwargs)
-            finally:
-                current_tracer_var.reset(token)
+                trace_id = kwargs.pop('trace_id', str(uuid4()))
+                tracer = TraceCollector(trace_id=trace_id)
+                token = current_tracer_var.set(tracer)
 
-        return wrapper
+                try:
+                    # ditto
+                    return await func(*args, **kwargs)
+                finally:
+                    current_tracer_var.reset(token)
+
+            return async_wrapper
+
+        else: # original sync logic
+            @wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                if current_tracer_var.get() is not None:
+                    return func(*args, **kwargs)
+
+                trace_id = kwargs.pop('trace_id', str(uuid4()))
+                tracer = TraceCollector(trace_id=trace_id)
+                token = current_tracer_var.set(tracer)
+
+                try:
+                    return func(*args, **kwargs)
+                finally:
+                    current_tracer_var.reset(token)
+
+            return sync_wrapper
 
     return decorator
 
@@ -62,85 +83,162 @@ def trace_span(
     """
 
     def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            tracer = current_tracer_var.get()
-            if not tracer:
-                return func(*args, **kwargs)
 
-            start_time = time.perf_counter()
-            status = "SUCCESS"
-            error_msg = None
-            error_code = None
-            result = None
 
-            captured_attributes = {}
-            if attributes_to_capture:
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                tracer = current_tracer_var.get()
+                if not tracer:
+
+                    return await func(*args, **kwargs)
+
+                start_time = time.perf_counter()
+                status = "SUCCESS"
+                error_msg = None
+                error_code = None
+                result = None
+
+                captured_attributes = {}
+                if attributes_to_capture:
+                    try:
+                        for attr_name in attributes_to_capture:
+                            if attr_name in kwargs:
+                                value = kwargs[attr_name]
+                                if not isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                                    value = str(value)
+                                captured_attributes[attr_name] = value
+                    except Exception as e:
+                        logger.warning("Failed to capture attributes for '%s': %s", func.__name__, e)
+
                 try:
-                    # Directly checks the kwargs dictionary.
-                    for attr_name in attributes_to_capture:
-                        if attr_name in kwargs:
-                            value = kwargs[attr_name]
-                            if not isinstance(value, (str, int, float, bool, list, dict, type(None))):
-                                value = str(value)
-                            captured_attributes[attr_name] = value
+                    result = await func(*args, **kwargs)
                 except Exception as e:
-                    logger.warning("Failed to capture attributes for '%s': %s", func.__name__, e)
+                    status = "ERROR"
+                    error_msg = traceback.format_exc()
 
-            try:
-                result = func(*args, **kwargs)
-            except Exception as e:
-                status = "ERROR"
-                error_msg = traceback.format_exc()
+                    try:
+                        if hasattr(e, 'error_code'):
+                            error_code = str(e.error_code)
+
+                        elif tracer.settings.failure_mapping:
+                            exception_class_name = type(e).__name__
+                            if exception_class_name in tracer.settings.failure_mapping:
+                                error_code = tracer.settings.failure_mapping[exception_class_name]
+
+                        if not error_code:
+                            error_code = type(e).__name__
+                    except Exception as e_code:
+                        logger.warning(f"Failed to determine error_code: {e_code}")
+                        error_code = "UNKNOWN_ERROR_CODE_FAILURE"
+                    raise e
+                finally:
+                    duration_ms = (time.perf_counter() - start_time) * 1000
+
+                    span_properties = {
+                        "trace_id": tracer.trace_id,
+                        "span_id": str(uuid4()),
+                        "function_name": func.__name__,
+                        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                        "duration_ms": duration_ms,
+                        "status": status,
+                        "error_message": error_msg,
+                        "error_code": error_code,
+                    }
+
+                    if tracer.settings.global_custom_values:
+                        span_properties.update(tracer.settings.global_custom_values)
+
+                    span_properties.update(captured_attributes)
+
+                    try:
+                        tracer.batch.add_object(
+                            collection=tracer.settings.EXECUTION_COLLECTION_NAME,
+                            properties=span_properties
+                        )
+                    except Exception as e:
+                        logger.error("Failed to log span for '%s' (trace_id: %s): %s", func.__name__, tracer.trace_id, e)
+
+                return result
+
+            return async_wrapper
+
+        else:
+            @wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                tracer = current_tracer_var.get()
+                if not tracer:
+                    return func(*args, **kwargs)
+
+                start_time = time.perf_counter()
+                status = "SUCCESS"
+                error_msg = None
+                error_code = None
+                result = None
+
+                captured_attributes = {}
+                if attributes_to_capture:
+                    try:
+                        for attr_name in attributes_to_capture:
+                            if attr_name in kwargs:
+                                value = kwargs[attr_name]
+                                if not isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                                    value = str(value)
+                                captured_attributes[attr_name] = value
+                    except Exception as e:
+                        logger.warning("Failed to capture attributes for '%s': %s", func.__name__, e)
 
                 try:
-                    if hasattr(e, 'error_code'):
-                        error_code = str(e.error_code)
-
-                    elif tracer.settings.failure_mapping:
-                        exception_class_name = type(e).__name__
-                        if exception_class_name in tracer.settings.failure_mapping:
-                            error_code = tracer.settings.failure_mapping[exception_class_name]
-
-                    if not error_code:
-                        error_code = type(e).__name__
-                except Exception as e_code:
-                    logger.warning(f"Failed to determine error_code: {e_code}")
-                    error_code = "UNKNOWN_ERROR_CODE_FAILURE"
-                raise e
-            finally:
-                duration_ms = (time.perf_counter() - start_time) * 1000
-
-                span_properties = {
-                    "trace_id": tracer.trace_id,
-                    "span_id": str(uuid4()),
-                    "function_name": func.__name__,
-                    "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-                    "duration_ms": duration_ms,
-                    "status": status,
-                    "error_message": error_msg,
-                    "error_code": error_code,
-                }
-
-                # 1. Apply global tags first.
-                if tracer.settings.global_custom_values:
-                    span_properties.update(tracer.settings.global_custom_values)
-
-                # 2. Apply captured attributes second (overriding global values if necessary).
-                # (If 'run_id' was captured, this value (e.g., override-run-xyz) overrides the global value.)
-                span_properties.update(captured_attributes)
-
-                try:
-                    tracer.batch.add_object(
-                        collection=tracer.settings.EXECUTION_COLLECTION_NAME,
-                        properties=span_properties
-                    )
+                    result = func(*args, **kwargs)
                 except Exception as e:
-                    logger.error("Failed to log span for '%s' (trace_id: %s): %s", func.__name__, tracer.trace_id, e)
+                    status = "ERROR"
+                    error_msg = traceback.format_exc()
 
-            return result
+                    try:
+                        if hasattr(e, 'error_code'):
+                            error_code = str(e.error_code)
 
-        return wrapper
+                        elif tracer.settings.failure_mapping:
+                            exception_class_name = type(e).__name__
+                            if exception_class_name in tracer.settings.failure_mapping:
+                                error_code = tracer.settings.failure_mapping[exception_class_name]
+
+                        if not error_code:
+                            error_code = type(e).__name__
+                    except Exception as e_code:
+                        logger.warning(f"Failed to determine error_code: {e_code}")
+                        error_code = "UNKNOWN_ERROR_CODE_FAILURE"
+                    raise e
+                finally:
+                    duration_ms = (time.perf_counter() - start_time) * 1000
+
+                    span_properties = {
+                        "trace_id": tracer.trace_id,
+                        "span_id": str(uuid4()),
+                        "function_name": func.__name__,
+                        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                        "duration_ms": duration_ms,
+                        "status": status,
+                        "error_message": error_msg,
+                        "error_code": error_code,
+                    }
+
+                    if tracer.settings.global_custom_values:
+                        span_properties.update(tracer.settings.global_custom_values)
+
+                    span_properties.update(captured_attributes)
+
+                    try:
+                        tracer.batch.add_object(
+                            collection=tracer.settings.EXECUTION_COLLECTION_NAME,
+                            properties=span_properties
+                        )
+                    except Exception as e:
+                        logger.error("Failed to log span for '%s' (trace_id: %s): %s", func.__name__, tracer.trace_id, e)
+
+                return result
+
+            return sync_wrapper
 
     if _func is None:
         return decorator
