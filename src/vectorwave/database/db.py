@@ -203,7 +203,7 @@ def create_vectorwave_schema(client: weaviate.WeaviateClient, settings: Weaviate
             properties=all_properties,
 
             # 7. Vectorizer Configuration
-            vector_config=vector_config,
+            vectorizer_config=vector_config,
 
             # 8. Generative Configuration (for RAG, etc.)
             generative_config=generative_config
@@ -307,7 +307,7 @@ def create_execution_schema(client: weaviate.WeaviateClient, settings: WeaviateS
         execution_collection = client.collections.create(
             name=collection_name,
             properties=properties,
-            vector_config=wvc.Configure.Vectorizer.none(),
+            vectorizer_config=wvc.Configure.Vectorizer.none(),
         )
         logger.info("Collection '%s' created successfully", collection_name)
         return execution_collection
