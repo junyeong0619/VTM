@@ -1,4 +1,4 @@
-# vtm/src/vectorwave/core/decorator.py
+# src/vectorwave/core/decorator.py
 
 import logging
 import inspect
@@ -19,12 +19,12 @@ def vectorize(search_description: str,
               **execution_tags):
     """
     VectorWave Decorator
-
-    (1) Collects function definitions (static data) once on script load.
-    (2) Records function execution (dynamic data) every time the function is called.
+    ...
     """
 
     def decorator(func):
+
+        is_async_func = inspect.iscoroutinefunction(func)
 
         func_uuid = None
         valid_execution_tags = {}
@@ -51,7 +51,6 @@ def vectorize(search_description: str,
             vector_to_add = None
 
             if vectorizer:
-
                 try:
                     logger.info(f"Vectorizing '{function_name}' using Python vectorizer...")
                     vector_to_add = vectorizer.embed(search_description)
@@ -85,47 +84,73 @@ def vectorize(search_description: str,
             )
 
         except Exception as e:
-
             logger.error("Error in @vectorize setup for '%s': %s", func.__name__, e)
+
+            if is_async_func:
+                @wraps(func)
+                async def original_async_func_wrapper(*args, **kwargs):
+                    return await func(*args, **kwargs)
+                return original_async_func_wrapper
+            else:
+                @wraps(func)
+                def original_sync_func_wrapper(*args, **kwargs):
+                    return func(*args, **kwargs)
+                return original_sync_func_wrapper
+
+        if is_async_func:
+
+            @trace_root()
+            @trace_span(attributes_to_capture=['function_uuid', 'team', 'priority', 'run_id'])
             @wraps(func)
-            def original_func_wrapper(*args, **kwargs):
-                return func(*args, **kwargs)
-            return original_func_wrapper
+            async def inner_wrapper(*args, **kwargs):
+                original_kwargs = kwargs.copy()
+                keys_to_remove = list(valid_execution_tags.keys())
+                keys_to_remove.append('function_uuid')
+                for key in execution_tags.keys():
+                    if key not in keys_to_remove:
+                        keys_to_remove.append(key)
+                for key in keys_to_remove:
+                    original_kwargs.pop(key, None)
 
+                # [MODIFIED] await 사용
+                return await func(*args, **original_kwargs)
 
-        # 2a. The *inner* wrapper to be wrapped by @trace_span
-        # This function receives all tags including full_kwargs from @trace_span.
-        @trace_root()
-        @trace_span(attributes_to_capture=['function_uuid', 'team', 'priority', 'run_id'])
-        @wraps(func)
-        def inner_wrapper(*args, **kwargs):
+            @wraps(func)
+            async def outer_wrapper(*args, **kwargs):
+                full_kwargs = kwargs.copy()
+                full_kwargs.update(valid_execution_tags)
+                full_kwargs['function_uuid'] = func_uuid
 
-            original_kwargs = kwargs.copy()
+                # [MODIFIED] await 사용
+                return await inner_wrapper(*args, **full_kwargs)
 
-            keys_to_remove = list(valid_execution_tags.keys())
-            keys_to_remove.append('function_uuid')
+            return outer_wrapper
 
-            for key in execution_tags.keys():
-                if key not in keys_to_remove:
-                    keys_to_remove.append(key)
+        else:
 
-            for key in keys_to_remove:
-                original_kwargs.pop(key, None)
+            @trace_root()
+            @trace_span(attributes_to_capture=['function_uuid', 'team', 'priority', 'run_id'])
+            @wraps(func)
+            def inner_wrapper(*args, **kwargs):
+                original_kwargs = kwargs.copy()
+                keys_to_remove = list(valid_execution_tags.keys())
+                keys_to_remove.append('function_uuid')
+                for key in execution_tags.keys():
+                    if key not in keys_to_remove:
+                        keys_to_remove.append(key)
+                for key in keys_to_remove:
+                    original_kwargs.pop(key, None)
 
-            return func(*args, **original_kwargs)
+                return func(*args, **original_kwargs)
 
+            @wraps(func)
+            def outer_wrapper(*args, **kwargs):
+                full_kwargs = kwargs.copy()
+                full_kwargs.update(valid_execution_tags)
+                full_kwargs['function_uuid'] = func_uuid
 
-        @wraps(func)
-        def outer_wrapper(*args, **kwargs):
+                return inner_wrapper(*args, **full_kwargs)
 
-            full_kwargs = kwargs.copy()
-            full_kwargs.update(valid_execution_tags)
-            full_kwargs['function_uuid'] = func_uuid
-
-            # 2. Call the *inner* wrapper with the full_kwargs
-            #    This call passes through the @trace_root -> @trace_span decorators.
-            return inner_wrapper(*args, **full_kwargs)
-
-        return outer_wrapper
+            return outer_wrapper
 
     return decorator
