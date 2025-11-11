@@ -407,7 +407,7 @@ def test_create_schema_vectorizer_openai(test_settings):
 
     call_args = mock_collections.create.call_args
 
-    vector_config_arg = call_args.kwargs.get('vector_config')
+    vector_config_arg = call_args.kwargs.get('vectorizer_config')
     # assert isinstance(vector_config_arg, wvc.Configure.Vectorizer)
     # assert vector_config_arg.name == "text2vec-openai"
 
@@ -442,7 +442,7 @@ def test_create_schema_vectorizer_none(test_settings):
     call_args = mock_collections.create.call_args
     # mock_none.assert_called_once() -> 삭제
 
-    vector_config_arg = call_args.kwargs.get('vector_config')
+    vector_config_arg = call_args.kwargs.get('vectorizer_config')
 
 
     assert vector_config_arg.vectorizer == "none"
