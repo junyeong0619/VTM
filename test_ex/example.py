@@ -13,6 +13,11 @@ from vectorwave.monitoring.tracer import trace_span
 
 client = None
 
+class CustomValueError(Exception):
+    def __init__(self, message, error_code):
+        super().__init__(message)
+        self.error_code = error_code
+
 try:
     print("Attempting to initialize VectorWave database...")
     client = initialize_database()
@@ -27,7 +32,7 @@ try:
     def step_1_validate_payment(user_id: str, amount: int):
         print(f"  [SPAN 1] Validating payment for {user_id}...")
         if amount < 0:
-            raise ValueError("Amount cannot be negative")
+            raise CustomValueError("Amount cannot be negative", "INVALID_INPUT")
         time.sleep(0.1)
         print(f"  [SPAN 1] Validation complete.")
         return True
@@ -79,7 +84,16 @@ try:
         print("\nNow calling 'generate_report' (별개의 trace_id 1개 생성)...")
         generate_report()
 
-        print("\nFunction calls completed successfully.")
+        print("\nNow calling 'generate_report' (별개의 trace_id 1개 생성)...")
+        generate_report()
+
+        print("\nNow calling 'process_payment' (INVALID_INPUT case)...")
+        try:
+            process_payment(user_id="user_B", amount=-50)
+        except CustomValueError as ve:
+            print(f"  -> Intended error caught: {ve}")
+
+        print("\nFunction calls completed.")
 
     except Exception as e:
         print(f"\nError during function execution: {e}")
