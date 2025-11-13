@@ -76,6 +76,8 @@ def vectorize(search_description: str,
                                 key
                             )
 
+            static_properties.update(valid_execution_tags)
+
             batch.add_object(
                 collection=settings.COLLECTION_NAME,
                 properties=static_properties,
